@@ -308,6 +308,36 @@ POSTS_SCHEMA: dict = {
 }
 
 
+PUBLISH_RESULTS_SCHEMA: dict = {
+    "$schema": "https://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "required": ["page", "date", "posts"],
+    "additionalProperties": True,
+    "properties": {
+        "page": {"type": "string"},
+        "date": {"type": "string", "pattern": r"^\d{4}-\d{2}-\d{2}$"},
+        "posts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["time", "type", "post_id", "comment_id", "status"],
+                "additionalProperties": True,
+                "properties": {
+                    "time": {
+                        "type": "string",
+                        "pattern": r"^[0-2][0-9]:[0-5][0-9]$",
+                    },
+                    "type": {"type": "string", "enum": _POST_TYPES},
+                    "post_id": {"type": ["string", "null"]},
+                    "comment_id": {"type": ["string", "null"]},
+                    "status": {"type": "integer"},
+                },
+            },
+        },
+    },
+}
+
+
 _SCHEMAS = {
     "profile": PROFILE_SCHEMA,
     "hackernews_results": HACKERNEWS_RESULTS_SCHEMA,
@@ -319,6 +349,7 @@ _SCHEMAS = {
     "insights":           INSIGHTS_SCHEMA,
     "reviewed_insights":  REVIEWED_INSIGHTS_SCHEMA,
     "posts":              POSTS_SCHEMA,
+    "publish_results":    PUBLISH_RESULTS_SCHEMA,
 }
 
 
