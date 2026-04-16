@@ -55,8 +55,16 @@ HACKERNEWS_ITEM_SCHEMA: dict[str, Any] = {
 }
 
 HACKERNEWS_RESULTS_SCHEMA: dict[str, Any] = {
-    "type": "array",
-    "items": HACKERNEWS_ITEM_SCHEMA,
+    "type": "object",
+    "required": ["source", "fetched_at", "items"],
+    "properties": {
+        "source": {"const": "hackernews"},
+        "fetched_at": {"type": "string"},
+        "items": {
+            "type": "array",
+            "items": HACKERNEWS_ITEM_SCHEMA,
+        },
+    },
 }
 
 

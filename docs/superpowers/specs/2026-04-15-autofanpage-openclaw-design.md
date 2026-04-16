@@ -77,8 +77,8 @@ OpenClaw documentation (`docs.openclaw.ai/llms.txt`) confirms the primitives we 
 │   └── page_en_biz.json
 ├── runs/                           # Per-page, per-date artifacts
 │   └── <page>/<YYYY-MM-DD>/
-│       ├── research_results.json       # YouTube
-│       ├── news_results.json           # Perplexity (news + reports + tweets)
+│       ├── youtube_results.json       # YouTube
+│       ├── perplexity_results.json    # Perplexity (news + reports + tweets)
 │       ├── reddit_results.json         # Reddit
 │       ├── hackernews_results.json     # Hacker News
 │       ├── merged_sources.json         # Unified URL list fed to NotebookLM
@@ -122,11 +122,11 @@ All skills accept the two conventional parameters `run_dir` (path) and `page_pro
   2. Compute `today = now(timezone).date()`; `run_dir = runs/<name>/<today>/`. Create if absent.
   3. Idempotency check: if `state/<name>/last_success.json.date == today`, abort, Telegram info "đã chạy".
   4. Kick Phase 1 in parallel via sub-agents (4 branches, all respecting the page profile's `sources` toggles):
-     - `youtube-researcher` → `research_results.json`
-     - `perplexity-researcher` → `news_results.json`
+     - `youtube-researcher` → `youtube_results.json`
+     - `perplexity-researcher` → `perplexity_results.json`
      - `reddit-researcher` → `reddit_results.json`
      - `hackernews-researcher` → `hackernews_results.json`
-     Wait for all four. Disabled sources return an empty array immediately (no sub-agent spawned). If **all four** sources return empty after retries, halt + Telegram error "no sources found".
+     Wait for all four. Disabled sources return an empty wrapped artifact immediately (no sub-agent spawned). If **all four** sources return 0 items after retries, halt + Telegram error "no sources found".
   5. Merge step: orchestrator reads all four files, deduplicates by URL, and writes `merged_sources.json` — a unified list of `{url, title, platform, score_or_views, created_at}` capped at `max_sources_per_platform` per platform (default 12, so up to 48 total — well under NotebookLM's 50-source limit).
   6. Phase 2: `notebooklm-analyzer` reads `merged_sources.json`. On failure (after 1 retry), halt + Telegram error (NotebookLM is mandatory).
   7. Phase 3a: `review-agent`. If `approved.length < page_profile.min_posts_required` (default 2), halt Writing+Publisher, Telegram partial.
@@ -139,7 +139,7 @@ All skills accept the two conventional parameters `run_dir` (path) and `page_pro
 
 - **Inputs:** `run_dir`, `topic` (from profile), `api_key_ref=secret:youtube_api`, `filters` (from profile: `youtube_min_views`, `youtube_min_subs`, default 100000 and 10000).
 - **Logic:** `GET youtube/v3/search` with `q=<topic>`, `order=viewCount`, `type=video`, `publishedAfter=<today - 7d>`, `maxResults=10`. Post-filter by `viewCount` and `channelSubscriberCount` (latter requires a follow-up `channels.list` call; batch by channel IDs).
-- **Output:** `run_dir/research_results.json` — array of `{title, url, views, channel, published_at}`.
+- **Output:** `run_dir/youtube_results.json` — object `{source, fetched_at, items}` where each item is `{title, url, video_id, channel, views, published_at}` (plus optional `channel_id` / `subscribers` when available).
 
 ### 3.3 `perplexity-researcher`
 
@@ -148,7 +148,7 @@ All skills accept the two conventional parameters `run_dir` (path) and `page_pro
   - `sonar-pro` — prompt: "Top 5 {topic} news today, return title/url/summary/source for each." → `type: "news"`
   - `sonar` academic — prompt: "Recent {topic} reports 2025–2026, return title/url/summary/source/key_stats for 3 reports." → `type: "report"`
   - `sonar-pro` — prompt: "Find 5 viral tweets from the past 7 days about {topic} on x.com/twitter.com. Return title/url/summary/source (tweet author) for each. Restrict results to site:x.com OR site:twitter.com." → `type: "tweet"`. Skipped if `sources.twitter_via_perplexity.enabled == false`.
-- **Output:** `run_dir/news_results.json` — array of `{title, url, summary, source, type: "news"|"report"|"tweet"}`.
+- **Output:** `run_dir/perplexity_results.json` — object `{source, fetched_at, news, reports, twitter}` where each bucket contains `{title, url, summary, source}` items.
 - **Rationale for tweets via Perplexity:** the direct X API costs $100+/month and has tight rate limits; Perplexity already indexes public tweets and returns them with URLs at no incremental cost since we hold a Perplexity key anyway.
 
 ### 3.4 `reddit-researcher`
@@ -158,8 +158,8 @@ All skills accept the two conventional parameters `run_dir` (path) and `page_pro
   1. Obtain OAuth token via `POST https://www.reddit.com/api/v1/access_token` with `grant_type=client_credentials` (Reddit "script" / "installed" app flow).
   2. For each subreddit in the profile list, `GET https://oauth.reddit.com/r/<sub>/top?t=<time_filter>&limit=25` with a descriptive `User-Agent` (required by Reddit policy, e.g. `openclaw-autofanpage/1.0`).
   3. Filter posts by `score >= min_score`; drop NSFW; keep top N per subreddit (default top 5).
-- **Output:** `run_dir/reddit_results.json` — array of `{title, url, permalink, subreddit, score, num_comments, created_utc, selftext_excerpt}`. `url` is the external link if the post is a link post, else `permalink` (full Reddit URL) for self posts.
-- **Skip mode:** if `sources.reddit.enabled == false`, write `[]` and return immediately (no OAuth call).
+- **Output:** `run_dir/reddit_results.json` — object `{source, fetched_at, items}` where each item is `{title, url, permalink, subreddit, score, num_comments, author, created_at, is_self}`. `url` is the external link if the post is a link post, else `permalink` (full Reddit URL) for self posts.
+- **Skip mode:** if `sources.reddit.enabled == false`, write a wrapped object with `items: []` and return immediately (no OAuth call).
 
 ### 3.5 `hackernews-researcher`
 
@@ -169,8 +169,8 @@ All skills accept the two conventional parameters `run_dir` (path) and `page_pro
   2. Batch-fetch story details (parallel up to 20) via `/v0/item/<id>.json`.
   3. Filter: `score >= min_points` AND created within last 7 days AND title/URL matches topic keywords (simple case-insensitive substring match across the topic words — model-free filter to keep this skill cheap).
   4. Keep top 10 by score.
-- **Output:** `run_dir/hackernews_results.json` — array of `{title, url, points, by, descendants, created_at, hn_url}`. `hn_url` is `https://news.ycombinator.com/item?id=<id>`; `url` is the external link (may equal `hn_url` for Ask-HN posts).
-- **Skip mode:** if `sources.hackernews.enabled == false`, write `[]` and return immediately.
+- **Output:** `run_dir/hackernews_results.json` — object `{source, fetched_at, items}` where each item is `{title, url, points, by, descendants, created_at, hn_url}`. `hn_url` is `https://news.ycombinator.com/item?id=<id>`; `url` is the external link (may equal `hn_url` for Ask-HN posts).
+- **Skip mode:** if `sources.hackernews.enabled == false`, write a wrapped object with `items: []` and return immediately.
 - **No auth required.**
 
 ### 3.6 `notebooklm-analyzer` (MCP-based) — **mandatory phase**
@@ -330,10 +330,10 @@ All skills accept the two conventional parameters `run_dir` (path) and `page_pro
 
 ### 4.2 Intermediate files
 
-- `research_results.json` — YouTube videos array (unchanged shape from workflow.md)
-- `news_results.json` — Perplexity output, array of `{title, url, summary, source, type: "news"|"report"|"tweet"}` (extended with `tweet` type)
-- `reddit_results.json` — array of `{title, url, permalink, subreddit, score, num_comments, created_utc, selftext_excerpt}`
-- `hackernews_results.json` — array of `{title, url, points, by, descendants, created_at, hn_url}`
+- `youtube_results.json` — `{source, fetched_at, items[]}` with YouTube video metadata
+- `perplexity_results.json` — `{source, fetched_at, news[], reports[], twitter[]}` with parsed Perplexity citations
+- `reddit_results.json` — `{source, fetched_at, items[]}` with flattened Reddit posts
+- `hackernews_results.json` — `{source, fetched_at, items[]}` with filtered Hacker News stories
 - `insights.json` — NotebookLM output (`overview`, `pain_points`, `insights`, `gap_topics`)
 - `reviewed_insights.json` — `approved[]` + `rejected[]` with scores and type suggestions
 - `posts.json` — 4-slot posts array with `time`, `type`, `content`, `first_comment`
@@ -357,10 +357,10 @@ Every file is validated against a JSON-schema fragment embedded in the consumer 
 |---|---|---|
 | Config invalid | `pages/<name>.json` missing key, malformed `post_times` | Halt immediately; Telegram error; no run_dir created |
 | Already ran today | `last_success.json.date == today` | Abort gracefully; Telegram `info` |
-| YouTube fail | API quota, revoked key, network | 2 retries (30s backoff) → write empty `research_results.json` and CONTINUE; Telegram warning |
-| Perplexity fail | API down, rate limit | 2 retries (30s backoff) → write empty `news_results.json` and CONTINUE; Telegram warning |
-| Reddit fail | OAuth rejected, subreddit banned, 429 | 2 retries (30s backoff) → write empty `reddit_results.json` and CONTINUE; Telegram warning |
-| Hacker News fail | Firebase transient error | 2 retries (30s backoff) → write empty `hackernews_results.json` and CONTINUE; Telegram warning |
+| YouTube fail | API quota, revoked key, network | 2 retries (30s backoff) → write empty wrapped `youtube_results.json` and CONTINUE; Telegram warning |
+| Perplexity fail | API down, rate limit | 2 retries (30s backoff) → write empty wrapped `perplexity_results.json` and CONTINUE; Telegram warning |
+| Reddit fail | OAuth rejected, subreddit banned, 429 | 2 retries (30s backoff) → write empty wrapped `reddit_results.json` and CONTINUE; Telegram warning |
+| Hacker News fail | Firebase transient error | 2 retries (30s backoff) → write empty wrapped `hackernews_results.json` and CONTINUE; Telegram warning |
 | All Phase 1 sources empty | Every source failed or returned 0 items | Halt before NotebookLM; Telegram error "no sources available, cannot analyze" |
 | NotebookLM cookie expired | `nlm login` cookies older than ~2–4 weeks | Halt + Telegram error with instruction "Run `nlm login` to refresh NotebookLM cookies." (Mandatory phase; no auto-refresh.) |
 | NotebookLM rate limit | Free-tier limit ~50 queries/day hit | Halt + Telegram error; next day's cron should succeed automatically |

@@ -17,11 +17,12 @@ directory.
 ## Behavior
 
 1. Loads the profile.
-2. If `sources.hackernews.enabled` is `false`, writes empty results and exits.
+2. If `sources.hackernews.enabled` is `false`, writes an empty wrapped artifact and exits.
 3. Otherwise pulls top 200 stories from HN API, filters by type=story + score + topic.
 
 ## Output
 
-Writes `<run_dir>/hackernews_results.json` — array of `{title, url, points, by, descendants, created_at, hn_url}`.
+Writes `<run_dir>/hackernews_results.json` — object `{source, fetched_at, items}` where
+`items` is an array of `{title, url, points, by, descendants, created_at, hn_url}`.
 
 ## No auth required.

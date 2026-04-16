@@ -12,6 +12,7 @@ import argparse
 import json
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -59,10 +60,12 @@ def main(argv: list[str] | None = None) -> int:
 
     profile = load_profile(args.profile)
     rd = RunDir(path=Path(args.run_dir))
+    fetched_at = datetime.now(timezone.utc).astimezone().isoformat()
 
     hn_cfg = profile.sources.get("hackernews", {})
     if not hn_cfg.get("enabled", False):
-        rd.write_json("hackernews_results", [])
+        doc = {"source": "hackernews", "fetched_at": fetched_at, "items": []}
+        rd.write_json("hackernews_results", doc)
         print(json.dumps({"skipped": True, "count": 0}))
         return 0
 
@@ -71,8 +74,13 @@ def main(argv: list[str] | None = None) -> int:
         min_points=hn_cfg.get("min_points", 50),
         limit=10,
     )
-    validate("hackernews_results", results)
-    rd.write_json("hackernews_results", results)
+    doc = {
+        "source": "hackernews",
+        "fetched_at": fetched_at,
+        "items": results,
+    }
+    validate("hackernews_results", doc)
+    rd.write_json("hackernews_results", doc)
     print(json.dumps({"count": len(results)}))
     return 0
 
