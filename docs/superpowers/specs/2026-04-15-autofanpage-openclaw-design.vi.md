@@ -71,8 +71,8 @@ Docs OpenClaw (`docs.openclaw.ai/llms.txt`) xác nhận đầy đủ primitive m
 │   └── page_en_biz.json
 ├── runs/                           # Artifact mỗi page mỗi ngày
 │   └── <page>/<YYYY-MM-DD>/
-│       ├── research_results.json       # YouTube
-│       ├── news_results.json           # Perplexity (news + report + tweet)
+│       ├── youtube_results.json       # YouTube
+│       ├── perplexity_results.json    # Perplexity (news + report + tweet)
 │       ├── reddit_results.json         # Reddit
 │       ├── hackernews_results.json     # Hacker News
 │       ├── merged_sources.json         # URL đã dedupe, feed cho NotebookLM
@@ -116,11 +116,11 @@ Mọi skill đều nhận 2 tham số chuẩn: `run_dir` (đường dẫn) và `
   2. Tính `today = now(timezone).date()`; `run_dir = runs/<name>/<today>/`. Tạo nếu chưa có.
   3. Check idempotency: nếu `state/<name>/last_success.json.date == today` → abort + Telegram info "đã chạy rồi".
   4. Kick Phase 1 song song 4 nhánh (tôn trọng toggle `sources` trong profile):
-     - `youtube-researcher` → `research_results.json`
-     - `perplexity-researcher` → `news_results.json`
+     - `youtube-researcher` → `youtube_results.json`
+     - `perplexity-researcher` → `perplexity_results.json`
      - `reddit-researcher` → `reddit_results.json`
      - `hackernews-researcher` → `hackernews_results.json`
-     Đợi hết 4 nhánh. Source disabled return mảng rỗng ngay, không spawn sub-agent. Nếu **cả 4** nguồn rỗng sau retry → halt + Telegram error "no sources found".
+     Đợi hết 4 nhánh. Source disabled ghi artifact dạng object rỗng ngay, không spawn sub-agent. Nếu **cả 4** nguồn trả về 0 item sau retry → halt + Telegram error "no sources found".
   5. **Merge step:** orchestrator đọc cả 4 file, dedupe theo URL, ghi `merged_sources.json` — list gộp `{url, title, platform, score_or_views, created_at}` cap theo `max_sources_per_platform` (default 12 → tối đa 48 URL, vẫn dưới giới hạn 50 source của NotebookLM).
   6. Phase 2: `notebooklm-analyzer` đọc `merged_sources.json`. Fail (sau 1 retry) → halt + Telegram error (NotebookLM bắt buộc).
   7. Phase 3a: `review-agent`. Nếu `approved.length < page_profile.min_posts_required` (default 2) → halt Writing + Publisher, Telegram partial.
@@ -133,7 +133,7 @@ Mọi skill đều nhận 2 tham số chuẩn: `run_dir` (đường dẫn) và `
 
 - **Input:** `run_dir`, `topic`, `api_key_ref=secret:youtube_api`, `filters` (từ profile: `youtube_min_views`, `youtube_min_subs`, default 100k và 10k).
 - **Logic:** `GET youtube/v3/search` với `q=<topic>`, `order=viewCount`, `type=video`, `publishedAfter=<today - 7d>`, `maxResults=10`. Post-filter theo `viewCount` và `channelSubscriberCount` (phải call thêm `channels.list` — batch theo channel IDs).
-- **Output:** `run_dir/research_results.json` — array `{title, url, views, channel, published_at}`.
+- **Output:** `run_dir/youtube_results.json` — object `{source, fetched_at, items}` trong đó mỗi item là `{title, url, video_id, channel, views, published_at}` (có thể kèm `channel_id` / `subscribers` nếu lấy được).
 
 ### 3.3 `perplexity-researcher`
 
@@ -142,7 +142,7 @@ Mọi skill đều nhận 2 tham số chuẩn: `run_dir` (đường dẫn) và `
   - `sonar-pro` — "Top 5 {topic} news today, return title/url/summary/source for each." → `type: "news"`
   - `sonar` academic — "Recent {topic} reports 2025–2026, return title/url/summary/source/key_stats for 3 reports." → `type: "report"`
   - `sonar-pro` — "Find 5 viral tweets from the past 7 days about {topic} on x.com/twitter.com. Return title/url/summary/source (tweet author) for each. Restrict results to site:x.com OR site:twitter.com." → `type: "tweet"`. Skip nếu `sources.twitter_via_perplexity.enabled == false`.
-- **Output:** `run_dir/news_results.json` — array `{title, url, summary, source, type: "news"|"report"|"tweet"}`.
+- **Output:** `run_dir/perplexity_results.json` — object `{source, fetched_at, news, reports, twitter}`; mỗi bucket chứa item `{title, url, summary, source}`.
 - **Lý do dùng Perplexity cho tweet:** X API chính thức giá $100+/tháng và rate limit chặt; Perplexity đã index tweet công khai và trả URL, không tốn thêm chi phí (đã có Perplexity key).
 
 ### 3.4 `reddit-researcher`
@@ -152,8 +152,8 @@ Mọi skill đều nhận 2 tham số chuẩn: `run_dir` (đường dẫn) và `
   1. Lấy OAuth token qua `POST https://www.reddit.com/api/v1/access_token` với `grant_type=client_credentials` (flow app "script" / "installed").
   2. Với mỗi subreddit trong list profile: `GET https://oauth.reddit.com/r/<sub>/top?t=<time_filter>&limit=25` kèm `User-Agent` tả rõ (Reddit yêu cầu, ví dụ `openclaw-autofanpage/1.0`).
   3. Filter post theo `score >= min_score`; bỏ NSFW; giữ top N/sub (default top 5).
-- **Output:** `run_dir/reddit_results.json` — array `{title, url, permalink, subreddit, score, num_comments, created_utc, selftext_excerpt}`. `url` là external link nếu là link post, còn self post thì là `permalink`.
-- **Skip mode:** nếu `sources.reddit.enabled == false` → ghi `[]` và return ngay (không OAuth).
+- **Output:** `run_dir/reddit_results.json` — object `{source, fetched_at, items}` trong đó mỗi item là `{title, url, permalink, subreddit, score, num_comments, author, created_at, is_self}`. `url` là external link nếu là link post, còn self post thì là `permalink`.
+- **Skip mode:** nếu `sources.reddit.enabled == false` → ghi object bọc với `items: []` và return ngay (không OAuth).
 
 ### 3.5 `hackernews-researcher`
 
@@ -163,8 +163,8 @@ Mọi skill đều nhận 2 tham số chuẩn: `run_dir` (đường dẫn) và `
   2. Batch fetch chi tiết (parallel ≤20 concurrent) qua `/v0/item/<id>.json`.
   3. Filter: `score >= min_points` AND tạo trong 7 ngày gần nhất AND title/URL match từ khoá topic (substring match case-insensitive, không dùng model để giữ skill này rẻ).
   4. Giữ top 10 theo score.
-- **Output:** `run_dir/hackernews_results.json` — array `{title, url, points, by, descendants, created_at, hn_url}`. `hn_url` là `https://news.ycombinator.com/item?id=<id>`; `url` là link ngoài (bằng `hn_url` nếu là Ask-HN).
-- **Skip mode:** nếu `sources.hackernews.enabled == false` → ghi `[]` return ngay.
+- **Output:** `run_dir/hackernews_results.json` — object `{source, fetched_at, items}` trong đó mỗi item là `{title, url, points, by, descendants, created_at, hn_url}`. `hn_url` là `https://news.ycombinator.com/item?id=<id>`; `url` là link ngoài (bằng `hn_url` nếu là Ask-HN).
+- **Skip mode:** nếu `sources.hackernews.enabled == false` → ghi object bọc với `items: []` rồi return ngay.
 - **Không cần auth.**
 
 ### 3.6 `notebooklm-analyzer` (qua MCP) — **bắt buộc**
@@ -325,10 +325,10 @@ Mọi skill đều nhận 2 tham số chuẩn: `run_dir` (đường dẫn) và `
 
 ### 4.2 File trung gian
 
-- `research_results.json` — YouTube videos (shape giữ nguyên như workflow.md)
-- `news_results.json` — Perplexity output, array `{title, url, summary, source, type: "news"|"report"|"tweet"}`
-- `reddit_results.json` — array `{title, url, permalink, subreddit, score, num_comments, created_utc, selftext_excerpt}`
-- `hackernews_results.json` — array `{title, url, points, by, descendants, created_at, hn_url}`
+- `youtube_results.json` — `{source, fetched_at, items[]}` chứa metadata video YouTube
+- `perplexity_results.json` — `{source, fetched_at, news[], reports[], twitter[]}` chứa citations đã parse từ Perplexity
+- `reddit_results.json` — `{source, fetched_at, items[]}` chứa post Reddit đã flatten
+- `hackernews_results.json` — `{source, fetched_at, items[]}` chứa story Hacker News đã filter
 - `insights.json` — NotebookLM output (`overview`, `pain_points`, `insights`, `gap_topics`)
 - `reviewed_insights.json` — `approved[]` + `rejected[]` với score + gợi ý type
 - `posts.json` — mảng 4 slot `time`, `type`, `content`, `first_comment`
@@ -352,10 +352,10 @@ Mọi file validate theo 1 JSON-schema fragment nhúng trong skill consumer (key
 |---|---|---|
 | Config invalid | `pages/<name>.json` thiếu key, `post_times` sai format | Halt ngay; Telegram error; không tạo run_dir |
 | Đã chạy hôm nay | `last_success.json.date == today` | Abort gracefully; Telegram `info` |
-| YouTube fail | Hết quota, key bị revoke, network | Retry 2 lần (30s backoff) → ghi `research_results.json` rỗng và CONTINUE; Telegram warning |
-| Perplexity fail | API down, rate limit | Retry 2 lần (30s backoff) → ghi rỗng và CONTINUE; Telegram warning |
-| Reddit fail | OAuth reject, subreddit banned, 429 | Retry 2 lần (30s backoff) → ghi rỗng và CONTINUE; Telegram warning |
-| Hacker News fail | Firebase lỗi tạm | Retry 2 lần (30s backoff) → ghi rỗng và CONTINUE; Telegram warning |
+| YouTube fail | Hết quota, key bị revoke, network | Retry 2 lần (30s backoff) → ghi `youtube_results.json` dạng object rỗng và CONTINUE; Telegram warning |
+| Perplexity fail | API down, rate limit | Retry 2 lần (30s backoff) → ghi `perplexity_results.json` dạng object rỗng và CONTINUE; Telegram warning |
+| Reddit fail | OAuth reject, subreddit banned, 429 | Retry 2 lần (30s backoff) → ghi `reddit_results.json` dạng object rỗng và CONTINUE; Telegram warning |
+| Hacker News fail | Firebase lỗi tạm | Retry 2 lần (30s backoff) → ghi `hackernews_results.json` dạng object rỗng và CONTINUE; Telegram warning |
 | Cả 4 nguồn Phase 1 rỗng | Mọi source đều fail hoặc trả 0 item | Halt trước NotebookLM; Telegram error "no sources available, cannot analyze" |
 | NotebookLM cookie hết hạn | Cookie `nlm login` cũ > 2–4 tuần | Halt + Telegram error với hướng dẫn "Chạy `nlm login` để refresh NotebookLM cookies." (Phase bắt buộc; không auto-refresh.) |
 | NotebookLM rate limit | Chạm limit ~50 query/ngày tier free | Halt + Telegram error; cron ngày mai khả năng cao tự chạy lại OK |

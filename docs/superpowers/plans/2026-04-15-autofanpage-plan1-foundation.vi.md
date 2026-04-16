@@ -12,6 +12,11 @@
 
 **Tham chiếu spec:** `docs/superpowers/specs/2026-04-15-autofanpage-openclaw-design.md` (EN) / `.vi.md` (VN). Plan này implement §2 (bố cục file), §3.1 (scaffold orchestrator — chỉ nhánh HN + Telegram), §3.5 (hackernews-researcher), §3.10 (telegram-reporter), §4.1 (profile schema), §4.3 (state/last_success.json). Các skill còn lại thuộc Plan 2/3/4.
 
+**Bối cảnh repo cho workspace này:**
+- Repo planning (`/Users/nguyenloc/VibeCoding/AutoFanpage_codex`) lưu spec/plan ở thư mục gốc.
+- Đích implement cho Plan 1 là worktree riêng tại `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan1-foundation`.
+- Mọi absolute path trong task list bên dưới đều trỏ vào worktree Plan 1 đó để handoff khớp với layout repo thực tế.
+
 ---
 
 ## Cấu trúc file
@@ -47,15 +52,15 @@
 ### Task 1: Khởi tạo dự án
 
 **Files:**
-- Tạo: `/Users/nguyenloc/VibeCoding/AutoFanpage/pyproject.toml`
-- Tạo: `/Users/nguyenloc/VibeCoding/AutoFanpage/.gitignore`
-- Tạo: `/Users/nguyenloc/VibeCoding/AutoFanpage/autofanpage/__init__.py`
-- Tạo: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/__init__.py`
-- Tạo: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/conftest.py`
+- Tạo: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan1-foundation/pyproject.toml`
+- Tạo: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan1-foundation/.gitignore`
+- Tạo: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan1-foundation/autofanpage/__init__.py`
+- Tạo: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan1-foundation/tests/__init__.py`
+- Tạo: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan1-foundation/tests/conftest.py`
 
 - [ ] **Step 1: Khởi tạo git repo (nếu chưa có)**
 
-Chạy: `cd /Users/nguyenloc/VibeCoding/AutoFanpage && git init && git branch -M main`
+Chạy: `cd /Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan1-foundation && git init && git branch -M main`
 
 - [ ] **Step 2: Viết `pyproject.toml`**
 
@@ -132,7 +137,7 @@ def fixtures_dir() -> Path:
 
 - [ ] **Step 5: Xác nhận cài đặt + chạy thử test rỗng**
 
-Chạy: `cd /Users/nguyenloc/VibeCoding/AutoFanpage && python -m pip install -e ".[dev]"`
+Chạy: `cd /Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan1-foundation && python -m pip install -e ".[dev]"`
 Mong đợi: Cài `autofanpage` ở chế độ editable.
 
 Chạy: `pytest`
@@ -281,11 +286,14 @@ def test_validate_profile_rejects_missing_page_id():
     assert any("page_id" in v for v in exc.value.violations)
 
 
-def test_validate_hackernews_results_requires_array():
+def test_validate_hackernews_results_requires_object_wrapper():
     with pytest.raises(SchemaError):
-        validate("hackernews_results", {"not": "an array"})
-    # Empty array is valid
-    validate("hackernews_results", [])
+        validate("hackernews_results", [{"title": "wrong shape"}])
+    validate("hackernews_results", {
+        "source": "hackernews",
+        "fetched_at": "2026-04-15T00:00:00Z",
+        "items": [],
+    })
 
 
 def test_validate_hackernews_item_requires_points():
@@ -293,7 +301,11 @@ def test_validate_hackernews_item_requires_points():
             "created_at": "2026-04-15T00:00:00Z", "hn_url": "http://h"}
     # Missing "points"
     with pytest.raises(SchemaError):
-        validate("hackernews_results", [item])
+        validate("hackernews_results", {
+            "source": "hackernews",
+            "fetched_at": "2026-04-15T00:00:00Z",
+            "items": [item],
+        })
 ```
 
 - [ ] **Step 2: Chạy test để xác nhận thất bại**
@@ -361,8 +373,16 @@ HACKERNEWS_ITEM_SCHEMA: dict[str, Any] = {
 }
 
 HACKERNEWS_RESULTS_SCHEMA: dict[str, Any] = {
-    "type": "array",
-    "items": HACKERNEWS_ITEM_SCHEMA,
+    "type": "object",
+    "required": ["source", "fetched_at", "items"],
+    "properties": {
+        "source": {"const": "hackernews"},
+        "fetched_at": {"type": "string"},
+        "items": {
+            "type": "array",
+            "items": HACKERNEWS_ITEM_SCHEMA,
+        },
+    },
 }
 
 
@@ -1315,6 +1335,7 @@ import argparse
 import json
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -1364,8 +1385,10 @@ def main(argv: list[str] | None = None) -> int:
     rd = RunDir(path=Path(args.run_dir))
 
     hn_cfg = profile.sources.get("hackernews", {})
+    fetched_at = datetime.now(timezone.utc).astimezone().isoformat()
     if not hn_cfg.get("enabled", False):
-        rd.write_json("hackernews_results", [])
+        doc = {"source": "hackernews", "fetched_at": fetched_at, "items": []}
+        rd.write_json("hackernews_results", doc)
         print(json.dumps({"skipped": True, "count": 0}))
         return 0
 
@@ -1374,8 +1397,13 @@ def main(argv: list[str] | None = None) -> int:
         min_points=hn_cfg.get("min_points", 50),
         limit=10,
     )
-    validate("hackernews_results", results)
-    rd.write_json("hackernews_results", results)
+    doc = {
+        "source": "hackernews",
+        "fetched_at": fetched_at,
+        "items": results,
+    }
+    validate("hackernews_results", doc)
+    rd.write_json("hackernews_results", doc)
     print(json.dumps({"count": len(results)}))
     return 0
 
@@ -1414,7 +1442,7 @@ The skill is a thin wrapper around `scripts/fetch_hn.py`. It:
 
 1. Loads the profile.
 2. If `sources.hackernews.enabled` is `false`, writes an empty
-   `hackernews_results.json` and exits.
+   wrapped `hackernews_results.json` object and exits.
 3. Otherwise pulls the top 200 stories from `hacker-news.firebaseio.com`,
    keeps only `type=story` items with `score >= sources.hackernews.min_points`
    whose titles mention any word of the page topic (case-insensitive),
@@ -1422,7 +1450,8 @@ The skill is a thin wrapper around `scripts/fetch_hn.py`. It:
 
 ## Output
 
-Writes `<run_dir>/hackernews_results.json` — an array of
+Writes `<run_dir>/hackernews_results.json` — một object
+`{source, fetched_at, items}` trong đó `items` là mảng
 `{title, url, points, by, descendants, created_at, hn_url}`.
 
 Stdout returns a one-line JSON `{"count": N}` that the orchestrator reads.
@@ -1774,7 +1803,11 @@ def test_orchestrator_runs_hn_then_telegram(test_env, mocker):
             # Simulate the real skill writing its output file
             run_dir = Path(args["run_dir"])
             run_dir.mkdir(parents=True, exist_ok=True)
-            (run_dir / "hackernews_results.json").write_text("[]")
+            (run_dir / "hackernews_results.json").write_text(json.dumps({
+                "source": "hackernews",
+                "fetched_at": "2026-04-15T06:00:00+07:00",
+                "items": [],
+            }))
             return {"count": 0}
         if name == "telegram-reporter":
             return {"status": args["status"], "sent": True}
@@ -2014,13 +2047,13 @@ echo "Verify with: openclaw skills list | grep autofanpage"
 
 - [ ] **Step 2: Cấp quyền thực thi**
 
-Chạy: `chmod +x /Users/nguyenloc/VibeCoding/AutoFanpage/scripts/install-skills.sh`
+Chạy: `chmod +x /Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan1-foundation/scripts/install-skills.sh`
 
 - [ ] **Step 3: Smoke-test script với thư mục đích tạm**
 
 Chạy:
 ```bash
-cd /Users/nguyenloc/VibeCoding/AutoFanpage
+cd /Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan1-foundation
 OPENCLAW_SKILLS_DIR=/tmp/fake-openclaw-skills ./scripts/install-skills.sh
 ls /tmp/fake-openclaw-skills/autofanpage/
 ```
