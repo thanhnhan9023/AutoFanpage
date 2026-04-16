@@ -52,3 +52,38 @@ def test_fetch_returns_filtered_results(tmp_path):
     assert "AI breakthrough" in titles
     assert "Not relevant" not in titles
     assert results[0]["points"] >= results[-1]["points"]
+
+
+@responses.activate
+def test_main_writes_wrapped_hackernews_artifact(tmp_path, fixtures_dir):
+    responses.add(
+        responses.GET,
+        "https://hacker-news.firebaseio.com/v0/topstories.json",
+        json=[1, 2],
+    )
+    responses.add(
+        responses.GET,
+        "https://hacker-news.firebaseio.com/v0/item/1.json",
+        json={"id": 1, "type": "story", "title": "AI automation launch",
+              "url": "https://example.com/a", "score": 200, "by": "u1",
+              "descendants": 30, "time": 1744156800},
+    )
+    responses.add(
+        responses.GET,
+        "https://hacker-news.firebaseio.com/v0/item/2.json",
+        json={"id": 2, "type": "story", "title": "Another AI automation win",
+              "url": "https://example.com/b", "score": 180, "by": "u2",
+              "descendants": 20, "time": 1744156800},
+    )
+
+    exit_code = fetch_hn.main([
+        "--run-dir", str(tmp_path),
+        "--profile", str(fixtures_dir / "page_test.json"),
+    ])
+
+    assert exit_code == 0
+    data = json.loads((tmp_path / "hackernews_results.json").read_text())
+    assert data["source"] == "hackernews"
+    assert isinstance(data["fetched_at"], str)
+    assert len(data["items"]) == 2
+    assert data["items"][0]["points"] >= data["items"][1]["points"]

@@ -39,17 +39,25 @@ def test_validate_profile_rejects_missing_page_id():
     assert any("page_id" in v for v in exc.value.violations)
 
 
-def test_validate_hackernews_results_requires_array():
+def test_validate_hackernews_results_requires_wrapped_object():
     with pytest.raises(SchemaError):
-        validate("hackernews_results", {"not": "an array"})
-    validate("hackernews_results", [])
+        validate("hackernews_results", [{"title": "wrong shape"}])
+    validate("hackernews_results", {
+        "source": "hackernews",
+        "fetched_at": "2026-04-15T00:00:00Z",
+        "items": [],
+    })
 
 
 def test_validate_hackernews_item_requires_points():
     item = {"title": "x", "url": "http://x", "by": "u", "descendants": 0,
             "created_at": "2026-04-15T00:00:00Z", "hn_url": "http://h"}
     with pytest.raises(SchemaError):
-        validate("hackernews_results", [item])
+        validate("hackernews_results", {
+            "source": "hackernews",
+            "fetched_at": "2026-04-15T00:00:00Z",
+            "items": [item],
+        })
 
 
 from autofanpage.schemas import (
