@@ -20,6 +20,13 @@ def format_message(*, status: str, page: str, details: dict[str, Any]) -> str:
             f"📅 {details['date']}",
             f"⏱ {details['elapsed_sec']}s",
         ]
+        counts = details.get("phase1_counts")
+        if counts:
+            parts = ", ".join(f"{k}={v}" for k, v in counts.items())
+            lines.append(f"🔎 sources: {parts}")
+        failed = details.get("phase1_failed_sources") or []
+        if failed:
+            lines.append(f"⚠️ failed: {', '.join(failed)}")
     elif status == "error":
         lines = [
             header,

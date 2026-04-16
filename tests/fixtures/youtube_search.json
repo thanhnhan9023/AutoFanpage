@@ -1,0 +1,16 @@
+{
+  "items": [
+    {"id": {"videoId": "v1"},
+     "snippet": {"title": "AI agents revolution",
+                 "channelId": "c1", "channelTitle": "Ch1",
+                 "publishedAt": "2026-04-10T00:00:00Z"}},
+    {"id": {"videoId": "v2"},
+     "snippet": {"title": "Cute cats",
+                 "channelId": "c2", "channelTitle": "Ch2",
+                 "publishedAt": "2026-04-11T00:00:00Z"}},
+    {"id": {"videoId": "v3"},
+     "snippet": {"title": "AI automation for business",
+                 "channelId": "c3", "channelTitle": "Ch3",
+                 "publishedAt": "2026-04-12T00:00:00Z"}}
+  ]
+}

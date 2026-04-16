@@ -1,0 +1,7 @@
+{
+  "items": [
+    {"id": "v1", "statistics": {"viewCount": "250000"}},
+    {"id": "v2", "statistics": {"viewCount": "5000"}},
+    {"id": "v3", "statistics": {"viewCount": "150000"}}
+  ]
+}
