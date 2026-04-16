@@ -1,0 +1,46 @@
+{
+  "data": {
+    "children": [
+      {"data": {
+        "title": "OpenAI drops GPT-5",
+        "subreddit": "ChatGPT",
+        "score": 1500,
+        "num_comments": 320,
+        "author": "u1",
+        "permalink": "/r/ChatGPT/comments/aaa/openai_drops_gpt5/",
+        "url": "https://openai.com/gpt5",
+        "created_utc": 1744156800,
+        "is_self": false,
+        "stickied": false,
+        "over_18": false
+      }},
+      {"data": {
+        "title": "Meta: please read the rules",
+        "subreddit": "ChatGPT",
+        "score": 50, "num_comments": 0, "author": "mod",
+        "permalink": "/r/ChatGPT/comments/bbb/meta/",
+        "url": "https://reddit.com/r/ChatGPT/comments/bbb/meta/",
+        "created_utc": 1744156800, "is_self": true,
+        "stickied": true, "over_18": false
+      }},
+      {"data": {
+        "title": "NSFW low-effort",
+        "subreddit": "ChatGPT",
+        "score": 200, "num_comments": 10, "author": "u3",
+        "permalink": "/r/ChatGPT/comments/ccc/nsfw/",
+        "url": "https://x.com/nsfw",
+        "created_utc": 1744156800, "is_self": false,
+        "stickied": false, "over_18": true
+      }},
+      {"data": {
+        "title": "AI agents beat humans at coding",
+        "subreddit": "ChatGPT",
+        "score": 80, "num_comments": 5, "author": "u4",
+        "permalink": "/r/ChatGPT/comments/ddd/ai_agents/",
+        "url": "https://arxiv.org/abs/xxx",
+        "created_utc": 1744156800, "is_self": false,
+        "stickied": false, "over_18": false
+      }}
+    ]
+  }
+}
