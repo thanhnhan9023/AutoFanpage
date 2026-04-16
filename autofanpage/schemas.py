@@ -72,10 +72,142 @@ LAST_SUCCESS_SCHEMA: dict[str, Any] = {
 }
 
 
+YOUTUBE_RESULTS_SCHEMA = {
+    "type": "object",
+    "required": ["source", "fetched_at", "items"],
+    "properties": {
+        "source": {"const": "youtube"},
+        "fetched_at": {"type": "string"},
+        "items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["title", "url", "video_id", "channel",
+                             "views", "published_at"],
+                "properties": {
+                    "title": {"type": "string"},
+                    "url": {"type": "string"},
+                    "video_id": {"type": "string"},
+                    "channel": {"type": "string"},
+                    "channel_id": {"type": "string"},
+                    "views": {"type": "integer", "minimum": 0},
+                    "subscribers": {"type": "integer", "minimum": 0},
+                    "published_at": {"type": "string"},
+                },
+            },
+        },
+    },
+}
+
+
+_PERP_ITEM = {
+    "type": "object",
+    "required": ["title", "url", "summary", "source"],
+    "properties": {
+        "title": {"type": "string"},
+        "url": {"type": "string"},
+        "summary": {"type": "string"},
+        "source": {"type": "string"},
+    },
+}
+
+PERPLEXITY_RESULTS_SCHEMA = {
+    "type": "object",
+    "required": ["source", "fetched_at", "news", "reports", "twitter"],
+    "properties": {
+        "source": {"const": "perplexity"},
+        "fetched_at": {"type": "string"},
+        "news": {"type": "array", "items": _PERP_ITEM},
+        "reports": {"type": "array", "items": _PERP_ITEM},
+        "twitter": {"type": "array", "items": _PERP_ITEM},
+    },
+}
+
+
+REDDIT_RESULTS_SCHEMA = {
+    "type": "object",
+    "required": ["source", "fetched_at", "items"],
+    "properties": {
+        "source": {"const": "reddit"},
+        "fetched_at": {"type": "string"},
+        "items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["title", "url", "subreddit", "score",
+                             "num_comments", "author", "permalink",
+                             "created_at", "is_self"],
+                "properties": {
+                    "title": {"type": "string"},
+                    "url": {"type": "string"},
+                    "subreddit": {"type": "string"},
+                    "score": {"type": "integer"},
+                    "num_comments": {"type": "integer"},
+                    "author": {"type": "string"},
+                    "permalink": {"type": "string"},
+                    "created_at": {"type": "string"},
+                    "is_self": {"type": "boolean"},
+                    "external_url": {"type": "string"},
+                },
+            },
+        },
+    },
+}
+
+
+MERGED_SOURCES_SCHEMA = {
+    "type": "object",
+    "required": ["profile", "topic", "language", "fetched_at",
+                 "sources_succeeded", "sources_failed",
+                 "counts_per_platform", "urls"],
+    "properties": {
+        "profile": {"type": "string"},
+        "topic": {"type": "string"},
+        "language": {"type": "string"},
+        "fetched_at": {"type": "string"},
+        "sources_succeeded": {"type": "array", "items": {"type": "string"}},
+        "sources_failed": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["source", "error"],
+                "properties": {
+                    "source": {"type": "string"},
+                    "error": {"type": "string"},
+                },
+            },
+        },
+        "counts_per_platform": {
+            "type": "object",
+            "additionalProperties": {"type": "integer"},
+        },
+        "urls": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["url", "title", "platform", "score_or_views",
+                             "created_at"],
+                "properties": {
+                    "url": {"type": "string"},
+                    "title": {"type": "string"},
+                    "platform": {"type": "string"},
+                    "score_or_views": {"type": "integer"},
+                    "created_at": {"type": "string"},
+                },
+            },
+        },
+    },
+}
+
+
 _SCHEMAS = {
     "profile": PROFILE_SCHEMA,
     "hackernews_results": HACKERNEWS_RESULTS_SCHEMA,
     "last_success": LAST_SUCCESS_SCHEMA,
+    "youtube_results": YOUTUBE_RESULTS_SCHEMA,
+    "perplexity_results": PERPLEXITY_RESULTS_SCHEMA,
+    "reddit_results": REDDIT_RESULTS_SCHEMA,
+    "merged_sources": MERGED_SOURCES_SCHEMA,
 }
 
 
