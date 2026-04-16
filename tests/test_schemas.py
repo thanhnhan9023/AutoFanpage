@@ -4,6 +4,7 @@ from autofanpage.errors import SchemaError
 from autofanpage.schemas import (
     INSIGHTS_SCHEMA,
     REVIEWED_INSIGHTS_SCHEMA,
+    PUBLISH_RESULTS_SCHEMA,
     POSTS_SCHEMA,
 )
 
@@ -224,3 +225,33 @@ def test_posts_schema_requires_exactly_four_posts_with_correct_types():
         "language": "vi",
     }
     validate("posts", bad)
+
+
+def test_publish_results_schema_accepts_valid():
+    validate("publish_results", {
+        "page": "page_test",
+        "date": "2026-04-16",
+        "posts": [
+            {"time": "08:00", "type": "news", "post_id": "123_456",
+             "comment_id": "123_789", "status": 200},
+        ],
+    })
+
+
+def test_publish_results_schema_rejects_missing_page():
+    with pytest.raises(Exception):
+        validate("publish_results", {
+            "date": "2026-04-16",
+            "posts": [],
+        })
+
+
+def test_publish_results_allows_null_ids_for_failed_slots():
+    validate("publish_results", {
+        "page": "page_test",
+        "date": "2026-04-16",
+        "posts": [
+            {"time": "08:00", "type": "news", "post_id": None,
+             "comment_id": None, "status": 400},
+        ],
+    })

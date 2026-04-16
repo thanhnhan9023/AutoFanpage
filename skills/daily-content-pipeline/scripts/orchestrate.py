@@ -44,6 +44,7 @@ SOURCE_ARTIFACTS = {
 PHASE2_SKILL = "notebooklm-analyzer"
 PHASE3A_SKILL = "review-agent"
 PHASE3B_SKILL = "writing-agent"
+PHASE4_SKILL = "facebook-publisher"
 
 NOTEBOOKLM_RETRIES = 1
 
@@ -140,6 +141,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profile-path", required=True)
     parser.add_argument("--base-dir", required=True)
     parser.add_argument("--date", default=None)
+    parser.add_argument("--dry-run", action="store_true", default=False)
     args = parser.parse_args(argv)
 
     base = Path(args.base_dir)
@@ -262,12 +264,37 @@ def main(argv: list[str] | None = None) -> int:
         posts_generated = sum(1 for p in posts["posts"] if p["content"])
         run_dir.log(f"writing generated={posts_generated}")
 
+        # ----- Phase 4: Publish / Dry-run -----
+        run_dir.log(f"phase4 facebook-publisher start dry_run={args.dry_run}")
+        run_skill(PHASE4_SKILL, {
+            "run_dir": str(run_dir.path),
+            "profile": args.profile_path,
+            "date": date,
+            "dry_run": args.dry_run,
+        })
+
+        if args.dry_run:
+            preview_path = run_dir.path / "preview.md"
+            preview = preview_path.read_text(encoding="utf-8") if preview_path.exists() else "(empty)"
+            _report(run_dir.path, status="info", page=args.page, details={
+                "message": f"Dry-run preview:\n\n{preview}",
+            })
+            return 0
+
+        pub_results = json.loads(
+            (run_dir.path / "publish_results.json").read_text(encoding="utf-8")
+        )
+        posts_scheduled = sum(
+            1 for post in pub_results["posts"] if post["status"] == 200
+        )
+        run_dir.log(f"publish scheduled={posts_scheduled}")
+
         elapsed = int(time.monotonic() - started)
         state.mark(date=date, run_dir=str(run_dir.path),
-                   posts_scheduled=0)
+                   posts_scheduled=posts_scheduled)
         _report(run_dir.path, status="success", page=args.page, details={
             "date": date,
-            "posts_scheduled": 0,
+            "posts_scheduled": posts_scheduled,
             "posts_generated": posts_generated,
             "approved_count": approved_count,
             "elapsed_sec": elapsed,

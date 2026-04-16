@@ -89,3 +89,13 @@ def test_success_template_renders_posts_generated_value():
                  "posts_generated": 4, "elapsed_sec": 60},
     )
     assert "4 posts generated" in msg
+
+
+def test_info_template_renders_dry_run_preview():
+    msg = format_message(
+        status="info", page="p",
+        details={"message": "Dry-run preview:\n\n## 08:00 — news\nContent here"},
+    )
+    assert "ℹ️" in msg
+    assert "Dry-run preview" in msg
+    assert "Content here" in msg
