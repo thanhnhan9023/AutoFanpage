@@ -52,7 +52,11 @@ def test_orchestrator_runs_hn_then_telegram(test_env, mocker):
         if name == "hackernews-researcher":
             run_dir = Path(args["run_dir"])
             run_dir.mkdir(parents=True, exist_ok=True)
-            (run_dir / "hackernews_results.json").write_text("[]")
+            (run_dir / "hackernews_results.json").write_text(json.dumps({
+                "source": "hackernews",
+                "fetched_at": "2026-04-15T06:00:00+07:00",
+                "items": [],
+            }))
             return {"count": 0}
         if name == "telegram-reporter":
             return {"status": args["status"], "sent": True}

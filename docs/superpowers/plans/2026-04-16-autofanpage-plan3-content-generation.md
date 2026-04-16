@@ -23,6 +23,11 @@ The orchestrator grows three sequential phases after Phase 1 merge: Phase 2 (Not
 
 **Spec reference:** `docs/superpowers/specs/2026-04-15-autofanpage-openclaw-design.md` (EN) / `.vi.md` (VN). This plan implements §3.6 (notebooklm-analyzer), §3.7 (review-agent), §3.8 (writing-agent), §3.1 orchestrator Phase 2 / 3a / 3b integration, and the `insights.json` / `reviewed_insights.json` / `posts.json` artifacts in §4. Publishing (§3.9), health-check (§3.11), and dry-run rendering (§3.1 step 9) remain Plan 4.
 
+**Repository context for this workspace:**
+- This planning repo (`/Users/nguyenloc/VibeCoding/AutoFanpage_codex`) stores the spec/plan documents at the root.
+- The implementation target for Plan 3 is the dedicated worktree at `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation`, which already contains the Plan 1-2 codebase.
+- All absolute file paths in the task list below point at that Plan 3 worktree so the execution handoff matches the actual repo layout.
+
 **Integration assumptions (Plan 2 outputs consumed by Plan 3):**
 - `<run_dir>/merged_sources.json` with top-level keys `urls[]`, `counts_per_platform{}`, `sources_succeeded[]`, `sources_failed[]`, `topic`, `language`. Each URL entry has `{url, title, platform, score_or_views, created_at}` — already deduplicated by canonical URL and capped at `max_sources_per_platform` per platform (default 12, ≤48 total).
 - The analyzer reads `urls[]` directly — no further dedup needed since Plan 2's merge already handles it. The `extract_urls` helper simply reads the list and applies an optional cap.
@@ -72,8 +77,8 @@ The orchestrator grows three sequential phases after Phase 1 merge: Phase 2 (Not
 ### Task 1: MCP wrapper with subprocess backend
 
 **Files:**
-- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage/autofanpage/mcp.py`
-- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/test_mcp.py`
+- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/autofanpage/mcp.py`
+- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/tests/test_mcp.py`
 
 - [ ] **Step 1: Write failing test `tests/test_mcp.py`**
 
@@ -251,8 +256,8 @@ git commit -m "feat(mcp): MCPClient wrapper for openclaw mcp call"
 ### Task 2: Schemas for insights, reviewed_insights, posts
 
 **Files:**
-- Modify: `/Users/nguyenloc/VibeCoding/AutoFanpage/autofanpage/schemas.py`
-- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/test_schemas.py` (extend)
+- Modify: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/autofanpage/schemas.py`
+- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/tests/test_schemas.py` (extend)
 
 - [ ] **Step 1: Write failing tests (extend `tests/test_schemas.py`)**
 
@@ -514,8 +519,8 @@ git commit -m "feat(schemas): insights, reviewed_insights, posts"
 ### Task 3: notebooklm-analyzer — input parsing & URL extraction (pure)
 
 **Files:**
-- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage/autofanpage/notebooklm.py`
-- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/test_notebooklm.py`
+- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/autofanpage/notebooklm.py`
+- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/tests/test_notebooklm.py`
 
 *Rationale:* the skill script is thin; the URL-extraction + dedup logic lives in a pure module so it's testable without MCP calls.
 
@@ -674,11 +679,11 @@ git commit -m "feat(notebooklm): pure URL extract + canonicalize + dedup"
 ### Task 4: notebooklm-analyzer skill
 
 **Files:**
-- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage/skills/notebooklm-analyzer/SKILL.md`
-- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage/skills/notebooklm-analyzer/scripts/__init__.py` (empty)
-- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage/skills/notebooklm-analyzer/scripts/analyze.py`
-- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/skills/test_notebooklm_analyzer.py`
-- Fixture: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/fixtures/merged_sources_small.json`
+- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/skills/notebooklm-analyzer/SKILL.md`
+- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/skills/notebooklm-analyzer/scripts/__init__.py` (empty)
+- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/skills/notebooklm-analyzer/scripts/analyze.py`
+- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/tests/skills/test_notebooklm_analyzer.py`
+- Fixture: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/tests/fixtures/merged_sources_small.json`
 
 - [ ] **Step 1: Create fixture `tests/fixtures/merged_sources_small.json`**
 
@@ -1041,8 +1046,8 @@ git commit -m "feat(skill): notebooklm-analyzer — 4 fixed queries via MCP"
 ### Task 5: Review scoring logic (pure)
 
 **Files:**
-- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage/autofanpage/scoring.py`
-- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/test_scoring.py`
+- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/autofanpage/scoring.py`
+- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/tests/test_scoring.py`
 
 *Design note:* the spec says "score each raw insight on Relevance / Novelty / Viral / Actionable, each 1–5". To keep reviews **reproducible** and **testable without an LLM**, we use deterministic keyword-based heuristics. An LLM-assisted review mode is out of scope for Plan 3 (YAGNI) — the heuristics are conservative enough to surface the obvious insights, and the writing-agent uses the LLM anyway.
 
@@ -1265,11 +1270,11 @@ git commit -m "feat(scoring): deterministic insight scoring + type assignment"
 ### Task 6: review-agent skill
 
 **Files:**
-- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage/skills/review-agent/SKILL.md`
-- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage/skills/review-agent/scripts/__init__.py`
-- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage/skills/review-agent/scripts/review.py`
-- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/skills/test_review_agent.py`
-- Fixture: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/fixtures/insights_sample.json`
+- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/skills/review-agent/SKILL.md`
+- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/skills/review-agent/scripts/__init__.py`
+- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/skills/review-agent/scripts/review.py`
+- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/tests/skills/test_review_agent.py`
+- Fixture: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/tests/fixtures/insights_sample.json`
 
 - [ ] **Step 1: Create fixture `tests/fixtures/insights_sample.json`**
 
@@ -1543,8 +1548,8 @@ git commit -m "feat(skill): review-agent — deterministic scoring + type assign
 ### Task 7: Templates (pure)
 
 **Files:**
-- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage/autofanpage/templates.py`
-- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/test_templates.py`
+- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/autofanpage/templates.py`
+- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/tests/test_templates.py`
 
 - [ ] **Step 1: Write failing test `tests/test_templates.py`**
 
@@ -1702,8 +1707,8 @@ git commit -m "feat(templates): 4 post-type templates + slot->type mapping"
 ### Task 8: Claude LLM wrapper
 
 **Files:**
-- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage/autofanpage/llm.py`
-- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/test_llm.py`
+- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/autofanpage/llm.py`
+- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/tests/test_llm.py`
 
 *Design:* thin `requests`-based wrapper around Anthropic's Messages API. We do not take a dependency on the `anthropic` SDK — this stays consistent with Plan 2's "HTTP only" style and keeps mocking straightforward via `responses`. Default model: `claude-opus-4-6` (latest Opus per the project CLAUDE.md).
 
@@ -1895,8 +1900,8 @@ git commit -m "feat(llm): Claude Messages API wrapper with 429/5xx retry"
 ### Task 9: Prompts (pure)
 
 **Files:**
-- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage/autofanpage/prompts.py`
-- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/test_prompts.py`
+- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/autofanpage/prompts.py`
+- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/tests/test_prompts.py`
 
 - [ ] **Step 1: Write failing test `tests/test_prompts.py`**
 
@@ -2044,12 +2049,12 @@ git commit -m "feat(prompts): writing + first-comment prompt builders"
 ### Task 10: writing-agent skill
 
 **Files:**
-- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage/skills/writing-agent/SKILL.md`
-- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage/skills/writing-agent/scripts/__init__.py`
-- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage/skills/writing-agent/scripts/write_posts.py`
-- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/skills/test_writing_agent.py`
-- Fixture: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/fixtures/reviewed_insights_sample.json`
-- Fixture: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/fixtures/profile_plan3.json`
+- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/skills/writing-agent/SKILL.md`
+- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/skills/writing-agent/scripts/__init__.py`
+- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/skills/writing-agent/scripts/write_posts.py`
+- Test: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/tests/skills/test_writing_agent.py`
+- Fixture: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/tests/fixtures/reviewed_insights_sample.json`
+- Fixture: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/tests/fixtures/profile_plan3.json`
 
 - [ ] **Step 1: Create fixture `tests/fixtures/reviewed_insights_sample.json`**
 
@@ -2472,9 +2477,9 @@ git commit -m "feat(skill): writing-agent — 4-slot Claude-backed post writer"
 ### Task 11: Orchestrator — Phase 2 / 3a / 3b integration
 
 **Files:**
-- Modify: `/Users/nguyenloc/VibeCoding/AutoFanpage/skills/daily-content-pipeline/scripts/orchestrate.py`
-- Modify: `/Users/nguyenloc/VibeCoding/AutoFanpage/autofanpage/telegram.py`
-- Modify: `/Users/nguyenloc/VibeCoding/AutoFanpage/skills/daily-content-pipeline/SKILL.md`
+- Modify: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/skills/daily-content-pipeline/scripts/orchestrate.py`
+- Modify: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/autofanpage/telegram.py`
+- Modify: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/skills/daily-content-pipeline/SKILL.md`
 
 - [ ] **Step 1: Extend `autofanpage/telegram.py` success / partial templates**
 
@@ -2705,7 +2710,7 @@ git commit -m "feat(orchestrator): Phase 2/3a/3b NotebookLM->Review->Writing"
 ### Task 12: Orchestrator integration test (Phase 2/3a/3b)
 
 **Files:**
-- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage/tests/skills/test_orchestrator_plan3.py`
+- Create: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/tests/skills/test_orchestrator_plan3.py`
 
 - [ ] **Step 1: Write the integration tests**
 
@@ -2993,7 +2998,7 @@ git commit -m "chore(install): verified Plan 3 skills install via glob"
 ### Task 14: Smoke test documentation
 
 **Files:**
-- Modify: `/Users/nguyenloc/VibeCoding/AutoFanpage/README.md`
+- Modify: `/Users/nguyenloc/VibeCoding/AutoFanpage_codex/.worktrees/plan3-content-generation/README.md`
 
 - [ ] **Step 1: Append a Plan 3 smoke test section to `README.md`**
 
