@@ -89,6 +89,20 @@ def test_orchestrator_runs_hn_then_telegram(test_env, mocker):
                 ],
             }))
             return {"status": "ok"}
+        if name == "facebook-publisher":
+            run_dir = Path(args["run_dir"])
+            (run_dir / "publish_results.json").write_text(json.dumps({
+                "page": "page_test",
+                "date": args.get("date", "2026-04-15"),
+                "posts": [{
+                    "time": "08:00",
+                    "type": "news",
+                    "post_id": "p0",
+                    "comment_id": "c0",
+                    "status": 200,
+                }],
+            }))
+            return {"status": "ok"}
         raise AssertionError(f"unexpected skill: {name}")
 
     mocker.patch("orchestrate.run_skill", side_effect=fake_run_skill)

@@ -127,6 +127,19 @@ def _plan2_fake(failing: set[str] | None = None):
             }))
             return {"status": "ok"}
 
+        if name == "facebook-publisher":
+            (run_dir / "publish_results.json").write_text(json.dumps({
+                "page": "page_test",
+                "date": "2026-04-16",
+                "posts": [
+                    {"time": "08:00", "type": "news", "post_id": "p0", "comment_id": "c0", "status": 200},
+                    {"time": "12:00", "type": "guide", "post_id": "p1", "comment_id": "c1", "status": 200},
+                    {"time": "16:00", "type": "opinion", "post_id": "p2", "comment_id": "c2", "status": 200},
+                    {"time": "20:00", "type": "case_study", "post_id": "p3", "comment_id": "c3", "status": 200},
+                ],
+            }))
+            return {"status": "ok"}
+
         raise RuntimeError(f"unexpected skill {name}")
 
     return fake, calls
