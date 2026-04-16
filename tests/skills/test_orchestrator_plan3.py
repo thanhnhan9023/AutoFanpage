@@ -161,6 +161,7 @@ def test_happy_path_runs_all_phases_and_reports_success(env, mocker):
 def test_notebooklm_failure_halts_pipeline_and_reports_cookies_hint(env, mocker):
     fake, calls = _plan2_fake(failing={"nblm_fail"})
     mocker.patch("orchestrate.run_skill", side_effect=fake)
+    mocker.patch("orchestrate.time.sleep", return_value=None)
     assert _run(env) == 1
 
     names = [c[0] for c in calls]
