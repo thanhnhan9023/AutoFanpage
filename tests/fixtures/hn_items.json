@@ -1,0 +1,12 @@
+[
+  {"id": 1, "type": "story", "title": "GPT-5 released", "url": "https://openai.com/gpt5",
+   "score": 450, "by": "sama", "descendants": 200, "time": 1744156800},
+  {"id": 2, "type": "story", "title": "Ask HN: what editor?", "url": null,
+   "score": 80, "by": "u2", "descendants": 50, "time": 1744156800},
+  {"id": 3, "type": "story", "title": "New AI chip beats H100", "url": "https://example.com/chip",
+   "score": 300, "by": "u3", "descendants": 120, "time": 1744156800},
+  {"id": 4, "type": "story", "title": "Unrelated story", "url": "https://ex.com/x",
+   "score": 200, "by": "u4", "descendants": 40, "time": 1744156800},
+  {"id": 5, "type": "job", "title": "We are hiring", "url": "https://j.com",
+   "score": 100, "by": "u5", "descendants": 0, "time": 1744156800}
+]

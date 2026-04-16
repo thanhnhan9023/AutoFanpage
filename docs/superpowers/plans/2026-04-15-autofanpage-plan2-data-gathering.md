@@ -33,7 +33,7 @@ A new shared HTTP helper (`autofanpage/http.py`) centralizes retries, timeouts, 
 
 **Modified:**
 - `skills/daily-content-pipeline/scripts/orchestrate.py` — parallel dispatch, merge call.
-- `autofanpage/schemas.py` — new schemas, existing `HACKERNEWS_RESULTS_SCHEMA` unchanged.
+- `autofanpage/schemas.py` — new schemas plus the wrapped `HACKERNEWS_RESULTS_SCHEMA` contract from Plan 1 (`{source, fetched_at, items}`), which `merge.py` reads via `doc["items"]`.
 - `scripts/install-skills.sh` — copy new skill folders.
 
 **New tests under `tests/`:**

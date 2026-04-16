@@ -1,0 +1,1 @@
+"""AutoFanpage OpenClaw skill package."""
