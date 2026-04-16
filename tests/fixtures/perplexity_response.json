@@ -1,0 +1,15 @@
+{
+  "id": "cmpl-123",
+  "choices": [{
+    "index": 0,
+    "message": {
+      "role": "assistant",
+      "content": "1. GPT-5 launch redefines enterprise AI [1]\nAnthropic released Claude 4 with agentic capabilities [2]\n3. New AI automation startups raise $500M [3]"
+    }
+  }],
+  "citations": [
+    "https://openai.com/blog/gpt5",
+    "https://anthropic.com/claude4",
+    "https://techcrunch.com/ai-funding"
+  ]
+}
