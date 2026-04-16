@@ -35,3 +35,19 @@ def test_load_profile_raises_on_malformed_json(tmp_path):
     path.write_text("{not json")
     with pytest.raises(ProfileError, match="parse"):
         load_profile(path)
+
+
+def test_profile_loads_writing_block(fixtures_dir):
+    p = load_profile(fixtures_dir / "profile_plan3.json")
+    assert p.writing.model == "claude-opus-4-6"
+    assert p.writing.max_tokens == 900
+
+
+def test_profile_without_writing_block_uses_defaults(tmp_path, fixtures_dir):
+    import json
+    src = json.loads((fixtures_dir / "profile_plan2.json").read_text())
+    p_path = tmp_path / "p.json"
+    p_path.write_text(json.dumps(src))
+    p = load_profile(str(p_path))
+    assert p.writing.model == "claude-opus-4-6"
+    assert p.writing.temperature == 0.7

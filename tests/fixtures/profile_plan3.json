@@ -1,0 +1,26 @@
+{
+  "name": "page_test",
+  "page_id": "123",
+  "access_token_ref": "secret:fb_page_test",
+  "topic": "AI automation",
+  "language": "vi",
+  "post_times": ["08:00", "12:00", "16:00", "20:00"],
+  "timezone": "Asia/Ho_Chi_Minh",
+  "filters": {"youtube_min_views": 100000, "youtube_min_subs": 10000},
+  "min_posts_required": 2,
+  "max_sources_per_platform": 12,
+  "writing": {
+    "model": "claude-opus-4-6",
+    "max_tokens": 900,
+    "temperature": 0.7,
+    "api_key_ref": "secret:anthropic_api_key"
+  },
+  "sources": {
+    "youtube":    {"enabled": true},
+    "perplexity": {"enabled": true},
+    "twitter_via_perplexity": {"enabled": false},
+    "reddit":     {"enabled": true, "subreddits": ["ChatGPT"],
+                   "min_score": 100, "time_filter": "week", "top_per_sub": 5},
+    "hackernews": {"enabled": true, "min_points": 50}
+  }
+}
