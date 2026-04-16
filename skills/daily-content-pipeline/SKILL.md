@@ -28,3 +28,11 @@ Top-level orchestrator. Plan 1: HN + Telegram vertical slice.
 6. Merge artifacts into `merged_sources.json` (deduplicated, per-platform capped).
 7. Abort with error Telegram if merged URLs = 0.
 8. Mark success + report via telegram-reporter with phase1_counts and failed sources.
+
+## Flow (Plan 3 additions)
+
+After the Plan 2 merge step and before `state.mark`:
+
+1. **Phase 2 — `notebooklm-analyzer`** (mandatory). One retry on failure.
+2. **Phase 3a — `review-agent`**. If `approved < min_posts_required` → partial.
+3. **Phase 3b — `writing-agent`**. Writes `posts.json` with 4 slots.

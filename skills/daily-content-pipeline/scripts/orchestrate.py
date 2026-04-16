@@ -41,6 +41,12 @@ SOURCE_ARTIFACTS = {
     "hackernews": "hackernews_results.json",
 }
 
+PHASE2_SKILL = "notebooklm-analyzer"
+PHASE3A_SKILL = "review-agent"
+PHASE3B_SKILL = "writing-agent"
+
+NOTEBOOKLM_RETRIES = 1
+
 
 def _report(run_dir: Path, *, status: str, page: str, details: dict) -> None:
     try:
@@ -114,6 +120,20 @@ def _phase1_counts(merged: dict) -> dict[str, int]:
     return merged["counts_per_platform"]
 
 
+def _run_with_retry(name: str, args: dict, retries: int, run_dir: RunDir) -> None:
+    last = None
+    for attempt in range(retries + 1):
+        try:
+            run_skill(name, args)
+            return
+        except Exception as e:  # noqa: BLE001
+            last = e
+            run_dir.log(f"[{name}] attempt {attempt + 1} failed: {e}")
+            if attempt < retries:
+                time.sleep(30)
+    raise last  # type: ignore[misc]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--page", required=True)
@@ -181,15 +201,75 @@ def main(argv: list[str] | None = None) -> int:
             })
             return 1
 
-        elapsed = int(time.monotonic() - started)
-        posts_scheduled = 0
-        state.mark(
-            date=date, run_dir=str(run_dir.path),
-            posts_scheduled=posts_scheduled,
+        # ----- Phase 2: NotebookLM (mandatory) -----
+        run_dir.log("phase2 notebooklm-analyzer start")
+        try:
+            _run_with_retry(
+                PHASE2_SKILL,
+                {"run_dir": str(run_dir.path),
+                 "profile": args.profile_path,
+                 "language": profile.language},
+                retries=NOTEBOOKLM_RETRIES,
+                run_dir=run_dir,
+            )
+        except Exception as e:  # noqa: BLE001
+            run_dir.log(f"PHASE2 FAIL: {e}")
+            log_tail = "\n".join(run_dir.log_path.read_text().splitlines()[-20:])
+            cause = str(e)
+            if "cookies" in cause.lower():
+                cause = (cause + "\nRun `nlm login` to refresh NotebookLM cookies.")
+            _report(run_dir.path, status="error", page=args.page, details={
+                "phase": "phase2-notebooklm", "cause": cause,
+                "log_tail": log_tail,
+            })
+            return 1
+
+        # ----- Phase 3a: Review -----
+        run_dir.log("phase3a review-agent start")
+        run_skill(PHASE3A_SKILL, {
+            "run_dir": str(run_dir.path),
+            "profile": args.profile_path,
+        })
+        reviewed = json.loads(
+            (run_dir.path / "reviewed_insights.json").read_text(encoding="utf-8")
         )
+        approved_count = len(reviewed["approved"])
+        run_dir.log(f"review approved={approved_count}")
+
+        if approved_count < profile.min_posts_required:
+            elapsed = int(time.monotonic() - started)
+            state.mark(date=date, run_dir=str(run_dir.path), posts_scheduled=0)
+            _report(run_dir.path, status="partial", page=args.page, details={
+                "date": date,
+                "phase": "review",
+                "approved_count": approved_count,
+                "posts_generated": 0,
+                "elapsed_sec": elapsed,
+                "phase1_counts": counts,
+                "phase1_failed_sources": list(failures),
+            })
+            return 0  # soft-success
+
+        # ----- Phase 3b: Writing -----
+        run_dir.log("phase3b writing-agent start")
+        run_skill(PHASE3B_SKILL, {
+            "run_dir": str(run_dir.path),
+            "profile": args.profile_path,
+        })
+        posts = json.loads(
+            (run_dir.path / "posts.json").read_text(encoding="utf-8")
+        )
+        posts_generated = sum(1 for p in posts["posts"] if p["content"])
+        run_dir.log(f"writing generated={posts_generated}")
+
+        elapsed = int(time.monotonic() - started)
+        state.mark(date=date, run_dir=str(run_dir.path),
+                   posts_scheduled=0)
         _report(run_dir.path, status="success", page=args.page, details={
             "date": date,
-            "posts_scheduled": posts_scheduled,
+            "posts_scheduled": 0,
+            "posts_generated": posts_generated,
+            "approved_count": approved_count,
             "elapsed_sec": elapsed,
             "phase1_counts": counts,
             "phase1_failed_sources": list(failures),
