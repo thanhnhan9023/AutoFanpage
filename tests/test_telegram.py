@@ -43,3 +43,25 @@ def test_info_template():
                          details={"message": "already ran today"})
     assert "ℹ️" in msg
     assert "already ran today" in msg
+
+
+def test_success_template_includes_phase1_counts():
+    msg = format_message(
+        status="success", page="p",
+        details={
+            "date": "2026-04-15", "posts_scheduled": 0, "elapsed_sec": 12,
+            "phase1_counts": {"youtube": 3, "hackernews": 5},
+            "phase1_failed_sources": ["reddit"],
+        },
+    )
+    assert "sources: youtube=3, hackernews=5" in msg
+    assert "failed: reddit" in msg
+
+
+def test_success_template_without_phase1_keys_is_backward_compatible():
+    msg = format_message(
+        status="success", page="p",
+        details={"date": "2026-04-15", "posts_scheduled": 4, "elapsed_sec": 12},
+    )
+    assert "sources:" not in msg
+    assert "failed:" not in msg

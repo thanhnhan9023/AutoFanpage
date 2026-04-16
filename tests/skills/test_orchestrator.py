@@ -52,8 +52,15 @@ def test_orchestrator_runs_hn_then_telegram(test_env, mocker):
         if name == "hackernews-researcher":
             run_dir = Path(args["run_dir"])
             run_dir.mkdir(parents=True, exist_ok=True)
-            (run_dir / "hackernews_results.json").write_text("[]")
-            return {"count": 0}
+            (run_dir / "hackernews_results.json").write_text(json.dumps({
+                "source": "hackernews",
+                "fetched_at": "2026-04-15T06:00:00+07:00",
+                "items": [{"title": "hn1", "url": "https://hn.com/1",
+                            "points": 100, "by": "u", "descendants": 5,
+                            "created_at": "2026-04-14T00:00:00Z",
+                            "hn_url": "https://news.ycombinator.com/item?id=1"}],
+            }))
+            return {"count": 1}
         if name == "telegram-reporter":
             return {"status": args["status"], "sent": True}
         raise AssertionError(f"unexpected skill: {name}")
