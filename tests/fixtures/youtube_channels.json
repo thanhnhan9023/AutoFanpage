@@ -1,0 +1,7 @@
+{
+  "items": [
+    {"id": "c1", "statistics": {"subscriberCount": "50000"}},
+    {"id": "c2", "statistics": {"subscriberCount": "500"}},
+    {"id": "c3", "statistics": {"subscriberCount": "20000"}}
+  ]
+}
