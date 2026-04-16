@@ -59,6 +59,9 @@ Expected:
 - Exit code 0.
 - Under `~/.openclaw/autofanpage/runs/page_smoketest/<date>/`:
   - `youtube_results.json`, `perplexity_results.json`, `reddit_results.json`, `hackernews_results.json`, `merged_sources.json`, `run.log`, `telegram_sent.log`.
+- The four Phase 1 source artifacts are wrapped JSON documents, not bare arrays:
+  - `youtube_results.json`, `reddit_results.json`, `hackernews_results.json` use `{source, fetched_at, items}`
+  - `perplexity_results.json` uses `{source, fetched_at, news, reports, twitter}`
 - Telegram channel: one success message with source counts.
 
 ### 4. Failure-mode check — force `min_posts_required` abort

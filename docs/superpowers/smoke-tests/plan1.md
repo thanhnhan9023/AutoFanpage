@@ -44,6 +44,11 @@ on real OpenClaw before moving to Plan 2.
        ls ~/.openclaw/autofanpage/runs/page_test/<today>/
        # Should include: hackernews_results.json, run.log, telegram_sent.log
 
+   Optional quick check:
+
+       jq '.source, (.items | length)' ~/.openclaw/autofanpage/runs/page_test/<today>/hackernews_results.json
+       # Expect: "hackernews" and a non-negative item count
+
 6. Confirm idempotency: re-run the same command.
    Expected Telegram: `ℹ️ AutoFanpage [page_test]  already ran on <today>`.
 
