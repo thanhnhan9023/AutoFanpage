@@ -1,0 +1,28 @@
+{
+  "approved": [
+    {"insight": "OpenAI launched GPT-5 — latency dropped 35% vs 4.5.",
+     "scores": {"relevance": 5, "novelty": 5, "viral": 5, "actionable": 2}, "total": 17,
+     "suggested_post_type": "news",
+     "hook_angle": "latency dropped 35%",
+     "source_url": "https://news.example/gpt5"},
+    {"insight": "Teams using prompt caching cut API spend 60% in 8 weeks — try batching similar calls first.",
+     "scores": {"relevance": 5, "novelty": 4, "viral": 5, "actionable": 5}, "total": 19,
+     "suggested_post_type": "guide",
+     "hook_angle": "60% API spend cut",
+     "source_url": "https://blog.example/caching"},
+    {"insight": "Why most AI agents still fail in production deployment.",
+     "scores": {"relevance": 5, "novelty": 4, "viral": 3, "actionable": 2}, "total": 14,
+     "suggested_post_type": "opinion",
+     "hook_angle": "most agents still fail",
+     "source_url": "https://blog.example/agents-fail"},
+    {"insight": "How Acme Corp cut support response time 55% with AI routing.",
+     "scores": {"relevance": 5, "novelty": 4, "viral": 5, "actionable": 4}, "total": 18,
+     "suggested_post_type": "case_study",
+     "hook_angle": "Acme cut response 55%",
+     "source_url": "https://case.example/acme"}
+  ],
+  "rejected": [
+    {"insight": "AI is the future.", "total": 7, "reason": "too generic"},
+    {"insight": "Random short.", "total": 6, "reason": "too short"}
+  ]
+}

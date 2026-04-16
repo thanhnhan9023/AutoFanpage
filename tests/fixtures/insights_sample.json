@@ -1,0 +1,27 @@
+{
+  "overview": "AI automation is moving from pilots into mainline ops.",
+  "pain_points": [
+    "Integrations still require manual token rotation",
+    "Cost per 1M tokens is unpredictable under prompt caching"
+  ],
+  "insights": [
+    "OpenAI announced GPT-5 yesterday — latency dropped 35% vs 4.5.",
+    "Teams using prompt caching cut API spend 60% in 8 weeks — try batching similar calls first.",
+    "Why most AI agents still fail in production deployment.",
+    "How Acme Corp cut support response time 55% with AI routing.",
+    "AI is the future.",
+    "A random short insight."
+  ],
+  "gap_topics": [
+    "Cold-start behavior under high concurrency",
+    "Regulatory pressure on agent autonomy"
+  ],
+  "source_urls": [
+    "https://y.example/v1",
+    "https://n.example/a",
+    "https://r.example/p1",
+    "https://h.example/i1"
+  ],
+  "language": "vi",
+  "notebook_id": "nb_test"
+}

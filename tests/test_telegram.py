@@ -65,3 +65,27 @@ def test_success_template_without_phase1_keys_is_backward_compatible():
     )
     assert "sources:" not in msg
     assert "failed:" not in msg
+
+
+def test_partial_template_includes_approved_and_generated_counts():
+    from autofanpage.telegram import format_message
+    msg = format_message(
+        status="partial", page="p",
+        details={
+            "date": "2026-04-16", "approved_count": 1, "posts_generated": 1,
+            "phase1_counts": {"youtube": 3}, "phase": "review",
+        },
+    )
+    assert "1 insights approved" in msg
+    assert "1/4 posts generated" in msg
+    assert "sources:" in msg
+
+
+def test_success_template_renders_posts_generated_value():
+    from autofanpage.telegram import format_message
+    msg = format_message(
+        status="success", page="p",
+        details={"date": "2026-04-16", "posts_scheduled": 0,
+                 "posts_generated": 4, "elapsed_sec": 60},
+    )
+    assert "4 posts generated" in msg

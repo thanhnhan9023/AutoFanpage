@@ -1,6 +1,11 @@
 import pytest
 from autofanpage.schemas import validate
 from autofanpage.errors import SchemaError
+from autofanpage.schemas import (
+    INSIGHTS_SCHEMA,
+    REVIEWED_INSIGHTS_SCHEMA,
+    POSTS_SCHEMA,
+)
 
 
 def test_validate_profile_accepts_valid_payload():
@@ -126,3 +131,96 @@ def test_merged_sources_schema_accepts_valid():
             "score_or_views": 150000, "created_at": "2026-04-10T00:00:00Z",
         }],
     })
+
+
+def test_insights_schema_requires_all_four_keys():
+    ok = {
+        "overview": "short paragraph",
+        "pain_points": ["p1", "p2"],
+        "insights": ["i1", "i2"],
+        "gap_topics": ["g1"],
+        "source_urls": ["https://example.com/a"],
+        "language": "vi",
+    }
+    validate("insights", ok)
+
+    bad = dict(ok)
+    bad.pop("insights")
+    with pytest.raises(Exception):
+        validate("insights", bad)
+
+
+def test_insights_schema_rejects_non_string_items():
+    bad = {
+        "overview": "x",
+        "pain_points": ["p"],
+        "insights": [123],
+        "gap_topics": [],
+        "source_urls": [],
+        "language": "vi",
+    }
+    with pytest.raises(Exception):
+        validate("insights", bad)
+
+
+def test_reviewed_insights_schema_total_must_equal_sum():
+    ok = {
+        "approved": [
+            {
+                "insight": "AI usage climbing 40% in SMBs",
+                "scores": {"relevance": 5, "novelty": 4, "viral": 4, "actionable": 3},
+                "total": 16,
+                "suggested_post_type": "news",
+                "hook_angle": "40% jump in 6 months",
+                "source_url": "https://example.com/a",
+            }
+        ],
+        "rejected": [
+            {"insight": "too generic", "total": 9, "reason": "below threshold"},
+        ],
+    }
+    validate("reviewed_insights", ok)
+
+
+def test_reviewed_insights_rejects_bad_post_type():
+    bad = {
+        "approved": [
+            {
+                "insight": "x",
+                "scores": {"relevance": 1, "novelty": 1, "viral": 1, "actionable": 1},
+                "total": 4,
+                "suggested_post_type": "meme",
+                "hook_angle": "",
+                "source_url": "",
+            }
+        ],
+        "rejected": [],
+    }
+    with pytest.raises(Exception):
+        validate("reviewed_insights", bad)
+
+
+def test_posts_schema_allows_null_content_for_unfilled_slots():
+    ok = {
+        "posts": [
+            {"time": "08:00", "type": "news", "content": "...", "first_comment": "..."},
+            {"time": "12:00", "type": "guide", "content": None, "first_comment": None},
+            {"time": "16:00", "type": "opinion", "content": "...", "first_comment": "..."},
+            {"time": "20:00", "type": "case_study", "content": None, "first_comment": None},
+        ],
+        "language": "vi",
+    }
+    validate("posts", ok)
+
+
+def test_posts_schema_requires_exactly_four_posts_with_correct_types():
+    bad = {
+        "posts": [
+            {"time": "08:00", "type": "news", "content": "x", "first_comment": "x"},
+            {"time": "12:00", "type": "news", "content": None, "first_comment": None},
+            {"time": "16:00", "type": "opinion", "content": None, "first_comment": None},
+            {"time": "20:00", "type": "case_study", "content": None, "first_comment": None},
+        ],
+        "language": "vi",
+    }
+    validate("posts", bad)

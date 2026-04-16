@@ -71,3 +71,66 @@ Expected:
 - Telegram error message with phase and cause.
 
 Reset the profile after.
+
+## Smoke test — Plan 3 (content generation)
+
+Preconditions: Plan 2 smoke test passes; `merged_sources.json` is produced
+for the test page.
+
+### 1. New secrets
+
+```bash
+openclaw secrets set anthropic_api_key    # sk-ant-...
+```
+
+### 2. MCP server for NotebookLM
+
+```bash
+pip install notebooklm-mcp-cli
+nlm login                               # browser opens, sign in to Google
+openclaw mcp add notebooklm-mcp ...     # confirm exact syntax on first install
+```
+
+### 3. Run orchestrator (still no publishing)
+
+```bash
+openclaw skills run daily-content-pipeline -- \
+    --page page_smoketest \
+    --profile-path ./profiles/page_smoketest.json \
+    --base-dir ~/.openclaw/autofanpage \
+    --date "$(date +%F)"
+```
+
+Expected:
+- Exit code 0.
+- Under `~/.openclaw/autofanpage/runs/page_smoketest/<date>/`:
+  all Plan 2 artifacts PLUS `insights.json`, `reviewed_insights.json`,
+  `posts.json`, and an extended `run.log`.
+- Telegram: one success message now including `N posts generated`.
+
+### 4. Failure-mode check — NotebookLM cookies expired
+
+Intentionally log out: `nlm logout` (or delete the cached cookie jar).
+Re-run the orchestrator.
+
+Expected:
+- Exit code 1.
+- Telegram: one error message with
+  `Phase: phase2-notebooklm` and cause ending with
+  `Run \`nlm login\` to refresh NotebookLM cookies.`
+- `last_success.json` NOT updated.
+
+Re-login (`nlm login`) before proceeding.
+
+### 5. Failure-mode check — partial review
+
+Temporarily raise `min_posts_required` in the profile to a value the review
+can't meet (e.g. `10`). Re-run.
+
+Expected:
+- Exit code 0 (soft-success).
+- Telegram: one partial message with `X insights approved`, `0/4 posts generated`.
+- `posts.json` not written.
+- `last_success.json` **is** updated for today.
+
+Reset `min_posts_required` to 2.

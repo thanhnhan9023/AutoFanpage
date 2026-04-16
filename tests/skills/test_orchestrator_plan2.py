@@ -60,6 +60,35 @@ def _fake_factory(failing: set[str]):
         calls.append((name, args))
         if name == "telegram-reporter":
             return {"status": "ok", "sent": True}
+        if name == "notebooklm-analyzer":
+            run_dir = Path(args["run_dir"])
+            (run_dir / "insights.json").write_text(json.dumps({
+                "overview": "x", "pain_points": [], "insights": ["test insight with AI automation data 40% improvement — try it first."],
+                "gap_topics": [], "source_urls": ["https://hn.com/1"], "language": "en",
+            }))
+            return {"status": "ok"}
+        if name == "review-agent":
+            run_dir = Path(args["run_dir"])
+            (run_dir / "reviewed_insights.json").write_text(json.dumps({
+                "approved": [
+                    {"insight": "a", "scores": {"relevance": 5, "novelty": 5, "viral": 5, "actionable": 2}, "total": 17, "suggested_post_type": "news", "hook_angle": "", "source_url": ""},
+                    {"insight": "b", "scores": {"relevance": 5, "novelty": 4, "viral": 5, "actionable": 5}, "total": 19, "suggested_post_type": "guide", "hook_angle": "", "source_url": ""},
+                ],
+                "rejected": [],
+            }))
+            return {"status": "ok"}
+        if name == "writing-agent":
+            run_dir = Path(args["run_dir"])
+            (run_dir / "posts.json").write_text(json.dumps({
+                "language": "en",
+                "posts": [
+                    {"time": "08:00", "type": "news", "content": "x", "first_comment": "y"},
+                    {"time": "12:00", "type": "guide", "content": None, "first_comment": None},
+                    {"time": "16:00", "type": "opinion", "content": None, "first_comment": None},
+                    {"time": "20:00", "type": "case_study", "content": None, "first_comment": None},
+                ],
+            }))
+            return {"status": "ok"}
         key = name.replace("-researcher", "")
         if key in failing:
             from autofanpage.errors import SourceFailedError

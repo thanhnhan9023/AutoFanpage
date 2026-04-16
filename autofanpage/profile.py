@@ -11,6 +11,14 @@ from autofanpage.schemas import validate
 
 
 @dataclass(frozen=True)
+class WritingConfig:
+    model: str = "claude-opus-4-6"
+    max_tokens: int = 900
+    temperature: float = 0.7
+    api_key_ref: str = "secret:anthropic_api_key"
+
+
+@dataclass(frozen=True)
 class Profile:
     name: str
     page_id: str
@@ -23,9 +31,12 @@ class Profile:
     max_sources_per_platform: int
     sources: dict[str, Any]
     filters: dict[str, Any] = field(default_factory=dict)
+    writing: WritingConfig = field(default_factory=WritingConfig)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Profile":
+        writing_data = data.get("writing", {})
+        writing = WritingConfig(**writing_data) if writing_data else WritingConfig()
         return cls(
             name=data["name"],
             page_id=data["page_id"],
@@ -38,6 +49,7 @@ class Profile:
             max_sources_per_platform=data["max_sources_per_platform"],
             sources=data["sources"],
             filters=data.get("filters", {}),
+            writing=writing,
         )
 
 

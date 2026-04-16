@@ -20,6 +20,9 @@ def format_message(*, status: str, page: str, details: dict[str, Any]) -> str:
             f"📅 {details['date']}",
             f"⏱ {details['elapsed_sec']}s",
         ]
+        generated = details.get("posts_generated")
+        if generated is not None:
+            lines.insert(2, f"✏️ {generated} posts generated")
         counts = details.get("phase1_counts")
         if counts:
             parts = ", ".join(f"{k}={v}" for k, v in counts.items())
@@ -37,12 +40,22 @@ def format_message(*, status: str, page: str, details: dict[str, Any]) -> str:
             details.get("log_tail", "(no log)"),
         ]
     elif status == "partial":
-        lines = [
-            header,
-            details["reason"],
-            "Scheduled post ids:",
-            *[f"- {pid}" for pid in details.get("post_ids", [])],
-        ]
+        lines = [header]
+        # Plan 3 partial shape
+        if "approved_count" in details:
+            lines.append(f"📝 {details.get('approved_count', 0)} insights approved")
+            lines.append(f"✏️ {details.get('posts_generated', 0)}/4 posts generated")
+            counts = details.get("phase1_counts")
+            if counts:
+                parts = ", ".join(f"{k}={v}" for k, v in counts.items())
+                lines.append(f"🔎 sources: {parts}")
+            if details.get("phase"):
+                lines.append(f"🪜 phase: {details['phase']}")
+        else:
+            # Legacy Plan 1/2 partial shape
+            lines.append(details.get("reason", ""))
+            lines.append("Scheduled post ids:")
+            lines.extend(f"- {pid}" for pid in details.get("post_ids", []))
     else:  # info
         lines = [header, details["message"]]
 

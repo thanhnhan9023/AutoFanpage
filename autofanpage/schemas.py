@@ -208,6 +208,114 @@ MERGED_SOURCES_SCHEMA = {
 }
 
 
+INSIGHTS_SCHEMA: dict = {
+    "$schema": "https://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "required": [
+        "overview", "pain_points", "insights", "gap_topics",
+        "source_urls", "language",
+    ],
+    "additionalProperties": True,
+    "properties": {
+        "overview": {"type": "string"},
+        "pain_points": {"type": "array", "items": {"type": "string"}},
+        "insights": {"type": "array", "items": {"type": "string"}},
+        "gap_topics": {"type": "array", "items": {"type": "string"}},
+        "source_urls": {
+            "type": "array",
+            "items": {"type": "string", "format": "uri"},
+        },
+        "language": {"type": "string"},
+        "notebook_id": {"type": "string"},
+    },
+}
+
+
+_POST_TYPES = ["news", "guide", "opinion", "case_study"]
+
+
+REVIEWED_INSIGHTS_SCHEMA: dict = {
+    "$schema": "https://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "required": ["approved", "rejected"],
+    "additionalProperties": True,
+    "properties": {
+        "approved": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "insight", "scores", "total",
+                    "suggested_post_type", "hook_angle", "source_url",
+                ],
+                "additionalProperties": True,
+                "properties": {
+                    "insight": {"type": "string"},
+                    "scores": {
+                        "type": "object",
+                        "required": ["relevance", "novelty", "viral", "actionable"],
+                        "additionalProperties": False,
+                        "properties": {
+                            "relevance":  {"type": "integer", "minimum": 1, "maximum": 5},
+                            "novelty":    {"type": "integer", "minimum": 1, "maximum": 5},
+                            "viral":      {"type": "integer", "minimum": 1, "maximum": 5},
+                            "actionable": {"type": "integer", "minimum": 1, "maximum": 5},
+                        },
+                    },
+                    "total": {"type": "integer", "minimum": 4, "maximum": 20},
+                    "suggested_post_type": {"type": "string", "enum": _POST_TYPES},
+                    "hook_angle": {"type": "string"},
+                    "source_url": {"type": "string"},
+                },
+            },
+        },
+        "rejected": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["insight", "total", "reason"],
+                "additionalProperties": True,
+                "properties": {
+                    "insight": {"type": "string"},
+                    "total": {"type": "integer", "minimum": 4, "maximum": 20},
+                    "reason": {"type": "string"},
+                },
+            },
+        },
+    },
+}
+
+
+POSTS_SCHEMA: dict = {
+    "$schema": "https://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "required": ["posts", "language"],
+    "additionalProperties": True,
+    "properties": {
+        "language": {"type": "string"},
+        "posts": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": {
+                "type": "object",
+                "required": ["time", "type", "content", "first_comment"],
+                "additionalProperties": True,
+                "properties": {
+                    "time": {
+                        "type": "string",
+                        "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+                    },
+                    "type": {"type": "string", "enum": _POST_TYPES},
+                    "content": {"type": ["string", "null"]},
+                    "first_comment": {"type": ["string", "null"]},
+                },
+            },
+        },
+    },
+}
+
+
 _SCHEMAS = {
     "profile": PROFILE_SCHEMA,
     "hackernews_results": HACKERNEWS_RESULTS_SCHEMA,
@@ -216,6 +324,9 @@ _SCHEMAS = {
     "perplexity_results": PERPLEXITY_RESULTS_SCHEMA,
     "reddit_results": REDDIT_RESULTS_SCHEMA,
     "merged_sources": MERGED_SOURCES_SCHEMA,
+    "insights":           INSIGHTS_SCHEMA,
+    "reviewed_insights":  REVIEWED_INSIGHTS_SCHEMA,
+    "posts":              POSTS_SCHEMA,
 }
 
 
