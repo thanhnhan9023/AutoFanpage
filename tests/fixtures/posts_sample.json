@@ -1,0 +1,29 @@
+{
+  "posts": [
+    {
+      "time": "08:00",
+      "type": "news",
+      "content": "Breaking: GPT-5 released.\n\n#AI #GPT5",
+      "first_comment": "Source: https://news.example/gpt5"
+    },
+    {
+      "time": "12:00",
+      "type": "guide",
+      "content": "How to cache prompts in 3 steps.\n\n#HowTo #AI",
+      "first_comment": "Step details: ..."
+    },
+    {
+      "time": "16:00",
+      "type": "opinion",
+      "content": null,
+      "first_comment": null
+    },
+    {
+      "time": "20:00",
+      "type": "case_study",
+      "content": null,
+      "first_comment": null
+    }
+  ],
+  "language": "vi"
+}

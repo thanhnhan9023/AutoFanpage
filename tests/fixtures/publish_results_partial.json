@@ -1,0 +1,13 @@
+{
+  "page": "page_test",
+  "date": "2026-04-16",
+  "posts": [
+    {
+      "time": "08:00",
+      "type": "news",
+      "post_id": "123_456",
+      "comment_id": "123_789",
+      "status": 200
+    }
+  ]
+}
