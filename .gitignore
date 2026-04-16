@@ -14,3 +14,8 @@ venv/
 .history/
 *.tmp
 .~lock.*
+.claude/
+AutoFanpage_SOP.docx
+AutoFanpage_SOP.pdf
+AutoFanpage_Workflow.html
+AutoFanpage_Workflow_Diagram.pdf
