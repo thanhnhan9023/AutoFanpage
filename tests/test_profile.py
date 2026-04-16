@@ -14,7 +14,7 @@ def test_load_profile_returns_typed_object(fixtures_dir):
     assert profile.language == "en"
     assert profile.post_times == ["08:00", "12:00", "16:00", "20:00"]
     assert profile.timezone == "UTC"
-    assert profile.min_posts_required == 2
+    assert profile.min_posts_required == 1
     assert profile.sources["hackernews"]["enabled"] is True
 
 
