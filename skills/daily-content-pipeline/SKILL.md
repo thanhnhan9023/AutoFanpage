@@ -36,3 +36,21 @@ After the Plan 2 merge step and before `state.mark`:
 1. **Phase 2 — `notebooklm-analyzer`** (mandatory). One retry on failure.
 2. **Phase 3a — `review-agent`**. If `approved < min_posts_required` → partial.
 3. **Phase 3b — `writing-agent`**. Writes `posts.json` with 4 slots.
+
+## Flow (Plan 4 additions)
+
+After Phase 3b (writing-agent):
+
+1. **Phase 4 — `facebook-publisher`**. Posts non-null slots to FB Graph API.
+   - `--dry-run`: renders `preview.md` + sends via Telegram info, returns 0.
+   - Normal: schedules posts, writes `publish_results.json`.
+   - Partial failure: succeeded slots recorded; orchestrator reports partial.
+2. Success Telegram now carries `posts_scheduled` (actual FB posts) in addition
+   to `posts_generated`.
+
+**New CLI flag:** `--dry-run` — skips Graph API, renders Markdown preview.
+
+**Cron setup:**
+
+    openclaw cron add --name "af-<page>" --cron "0 6 * * *" --session isolated --tz <tz> --message "/daily_content_pipeline page=<name>"
+    openclaw cron add --name "af-health" --cron "0 9 * * *" --message "/autofanpage_health_check"
