@@ -55,6 +55,29 @@ def test_validate_profile_accepts_tavily_backend():
     validate("profile", valid)
 
 
+def test_validate_profile_accepts_perplexity_backend():
+    valid = {
+        "name": "page_test",
+        "page_id": "123",
+        "access_token_ref": "secret:fb_test",
+        "topic": "AI",
+        "language": "en",
+        "post_times": ["08:00", "12:00", "16:00", "20:00"],
+        "timezone": "UTC",
+        "min_posts_required": 2,
+        "max_sources_per_platform": 12,
+        "sources": {
+            "youtube": {"enabled": False},
+            "perplexity": {"enabled": False, "backend": "perplexity"},
+            "twitter_via_perplexity": {"enabled": False},
+            "reddit": {"enabled": False, "subreddits": [], "min_score": 0,
+                       "time_filter": "week", "top_per_sub": 0},
+            "hackernews": {"enabled": True, "min_points": 10},
+        },
+    }
+    validate("profile", valid)
+
+
 def test_validate_profile_rejects_unknown_perplexity_backend():
     invalid = {
         "name": "page_test",
