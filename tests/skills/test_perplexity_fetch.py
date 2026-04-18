@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 import responses
 
+from autofanpage.sources import perplexity
+
 SCRIPT = Path(__file__).resolve().parents[2] / "skills" / "perplexity-researcher" / "scripts"
 sys.path.insert(0, str(SCRIPT))
 import fetch_perplexity  # noqa: E402
@@ -71,3 +73,57 @@ def test_run_skips_twitter_when_disabled(tmp_path, monkeypatch):
     data = json.loads(out.read_text())
     assert data["twitter"] == []
     assert len(responses.calls) == 2
+
+
+def test_shape_tavily_results_deduplicates_and_limits():
+    items = perplexity.shape_tavily_results(
+        {
+            "results": [
+                {
+                    "title": "Launch recap",
+                    "url": "https://openai.com/blog/launch",
+                    "content": "Key release notes",
+                },
+                {
+                    "title": "Launch recap duplicate",
+                    "url": "https://openai.com/blog/launch",
+                    "content": "Should be skipped by URL dedupe",
+                },
+            ],
+        },
+        limit=1,
+    )
+
+    assert items == [
+        {
+            "title": "Launch recap",
+            "url": "https://openai.com/blog/launch",
+            "summary": "Key release notes",
+            "source": "openai.com",
+        },
+    ]
+
+
+def test_filter_twitter_urls_keeps_only_x_hosts():
+    items = [
+        {
+            "title": "x",
+            "url": "https://x.com/sama/status/1",
+            "summary": "",
+            "source": "x.com",
+        },
+        {
+            "title": "twitter",
+            "url": "https://twitter.com/openai/status/2",
+            "summary": "",
+            "source": "twitter.com",
+        },
+        {
+            "title": "other",
+            "url": "https://example.com/post",
+            "summary": "",
+            "source": "example.com",
+        },
+    ]
+
+    assert perplexity.filter_twitter_urls(items) == items[:2]

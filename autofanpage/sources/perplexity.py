@@ -54,3 +54,27 @@ def shape_items(
         if len(out) >= limit:
             break
     return out
+
+
+def shape_tavily_results(resp: dict[str, Any], *, limit: int) -> list[dict[str, str]]:
+    seen: set[str] = set()
+    out: list[dict[str, str]] = []
+    for item in resp.get("results", []):
+        title = str(item.get("title") or "").strip()
+        url = str(item.get("url") or "").strip()
+        if not title or not url or url in seen:
+            continue
+        seen.add(url)
+        out.append({
+            "title": title,
+            "url": url,
+            "summary": str(item.get("content") or "").strip(),
+            "source": _hostname(url),
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
+def filter_twitter_urls(items: list[dict[str, str]]) -> list[dict[str, str]]:
+    return [item for item in items if item.get("source") in {"x.com", "twitter.com"}]
