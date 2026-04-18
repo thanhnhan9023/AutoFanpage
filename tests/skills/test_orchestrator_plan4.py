@@ -22,6 +22,11 @@ def _full_fake(failing: set[str] | None = None):
     failing = failing or set()
     calls: list[tuple[str, dict]] = []
 
+    def researcher_key(name: str) -> str:
+        if name == "reddit-researcher-apify":
+            return "reddit"
+        return name.replace("-researcher", "")
+
     def fake(name, args):
         calls.append((name, args))
         run_dir = Path(args.get("run_dir", "."))
@@ -29,8 +34,8 @@ def _full_fake(failing: set[str] | None = None):
         if name == "telegram-reporter":
             return {"status": "ok", "sent": True}
 
-        if name.endswith("-researcher"):
-            key = name.replace("-researcher", "")
+        if name.endswith("-researcher") or name == "reddit-researcher-apify":
+            key = researcher_key(name)
             if key in failing:
                 from autofanpage.errors import SourceFailedError
                 raise SourceFailedError(f"fake fail {key}")
@@ -155,6 +160,9 @@ def _run(env, date="2026-04-16", dry_run=False):
 def test_full_pipeline_publishes_and_reports_scheduled_count(env, mocker):
     fake, calls = _full_fake()
     mocker.patch("orchestrate.run_skill", side_effect=fake)
+    mcp = mocker.Mock()
+    mcp.call_tool.return_value = {"notebook_id": "nb_preflight"}
+    mocker.patch("orchestrate.MCPClient", return_value=mcp)
     mocker.patch("orchestrate.time.sleep", return_value=None)
     assert _run(env) == 0
 
@@ -169,6 +177,9 @@ def test_full_pipeline_publishes_and_reports_scheduled_count(env, mocker):
 def test_dry_run_skips_publish_sends_preview(env, mocker):
     fake, calls = _full_fake()
     mocker.patch("orchestrate.run_skill", side_effect=fake)
+    mcp = mocker.Mock()
+    mcp.call_tool.return_value = {"notebook_id": "nb_preflight"}
+    mocker.patch("orchestrate.MCPClient", return_value=mcp)
     mocker.patch("orchestrate.time.sleep", return_value=None)
     assert _run(env, dry_run=True) == 0
 
@@ -184,9 +195,28 @@ def test_dry_run_skips_publish_sends_preview(env, mocker):
     assert not LastSuccess(base=env["base"], page=env["page"]).ran_on("2026-04-16")
 
 
+def test_dry_run_run_log_records_phase4_completion(env, mocker):
+    fake, _calls = _full_fake()
+    mocker.patch("orchestrate.run_skill", side_effect=fake)
+    mcp = mocker.Mock()
+    mcp.call_tool.return_value = {"notebook_id": "nb_preflight"}
+    mocker.patch("orchestrate.MCPClient", return_value=mcp)
+    mocker.patch("orchestrate.time.sleep", return_value=None)
+
+    assert _run(env, dry_run=True) == 0
+
+    run_log = (
+        Path(env["base"]) / "runs" / env["page"] / "2026-04-16" / "run.log"
+    ).read_text(encoding="utf-8")
+    assert "phase4 facebook-publisher complete dry_run=True preview=preview.md" in run_log
+
+
 def test_publish_failure_reports_error(env, mocker):
     fake, calls = _full_fake(failing={"fb_fail"})
     mocker.patch("orchestrate.run_skill", side_effect=fake)
+    mcp = mocker.Mock()
+    mcp.call_tool.return_value = {"notebook_id": "nb_preflight"}
+    mocker.patch("orchestrate.MCPClient", return_value=mcp)
     mocker.patch("orchestrate.time.sleep", return_value=None)
 
     rc = _run(env)

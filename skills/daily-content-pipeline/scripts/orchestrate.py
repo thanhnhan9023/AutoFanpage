@@ -21,6 +21,7 @@ from autofanpage.dispatch import run_skill
 from autofanpage.errors import (
     AutofanpageError, SkillInvocationError, SourceFailedError,
 )
+from autofanpage.mcp import MCPClient
 from autofanpage.merge import merge_sources
 from autofanpage.profile import load_profile
 from autofanpage.run_dir import RunDir
@@ -143,6 +144,19 @@ def _run_with_retry(name: str, args: dict, retries: int, run_dir: RunDir) -> Non
     raise last  # type: ignore[misc]
 
 
+def _preflight_notebooklm() -> str:
+    client = MCPClient()
+    payload = client.call_tool(
+        server="notebooklm-mcp",
+        tool="notebook_create",
+        args={"title": "AutoFanpage NotebookLM preflight"},
+    )
+    notebook_id = payload.get("notebook_id")
+    if not notebook_id:
+        raise AutofanpageError(f"NotebookLM preflight returned unexpected payload: {payload!r}")
+    return str(notebook_id)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--page", required=True)
@@ -212,13 +226,17 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         # ----- Phase 2: NotebookLM (mandatory) -----
-        run_dir.log("phase2 notebooklm-analyzer start")
+        run_dir.log(
+            f"phase2 notebooklm-analyzer start detailed_log={run_dir.path / 'notebooklm.log'}"
+        )
         try:
+            notebook_id = _preflight_notebooklm()
             _run_with_retry(
                 PHASE2_SKILL,
                 {"run_dir": str(run_dir.path),
                  "profile": args.profile_path,
-                 "language": profile.language},
+                 "language": profile.language,
+                 "notebook_id": notebook_id},
                 retries=NOTEBOOKLM_RETRIES,
                 run_dir=run_dir,
             )
@@ -226,7 +244,7 @@ def main(argv: list[str] | None = None) -> int:
             run_dir.log(f"PHASE2 FAIL: {e}")
             log_tail = "\n".join(run_dir.log_path.read_text().splitlines()[-20:])
             cause = str(e)
-            if "cookies" in cause.lower():
+            if "cookies" in cause.lower() or "auth" in cause.lower():
                 cause = (cause + "\nRun `nlm login` to refresh NotebookLM cookies.")
             _report(run_dir.path, status="error", page=args.page, details={
                 "phase": "phase2-notebooklm", "cause": cause,
@@ -283,6 +301,9 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.dry_run:
             preview_path = run_dir.path / "preview.md"
+            run_dir.log(
+                f"phase4 facebook-publisher complete dry_run=True preview={preview_path.name}"
+            )
             preview = preview_path.read_text(encoding="utf-8") if preview_path.exists() else "(empty)"
             _report(run_dir.path, status="info", page=args.page, details={
                 "message": f"Dry-run preview:\n\n{preview}",
