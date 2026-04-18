@@ -51,3 +51,15 @@ def test_profile_without_writing_block_uses_defaults(tmp_path, fixtures_dir):
     p = load_profile(str(p_path))
     assert p.writing.model == "claude-opus-4-6"
     assert p.writing.temperature == 0.7
+
+
+def test_profile_defaults_reddit_backend_to_apify(tmp_path, fixtures_dir):
+    import json
+    src = json.loads((fixtures_dir / "profile_plan2.json").read_text())
+    src["sources"]["reddit"].pop("backend", None)
+    p_path = tmp_path / "p.json"
+    p_path.write_text(json.dumps(src))
+
+    p = load_profile(str(p_path))
+
+    assert p.sources["reddit"]["backend"] == "apify"

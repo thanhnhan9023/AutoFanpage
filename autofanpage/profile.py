@@ -37,6 +37,11 @@ class Profile:
     def from_dict(cls, data: dict[str, Any]) -> "Profile":
         writing_data = data.get("writing", {})
         writing = WritingConfig(**writing_data) if writing_data else WritingConfig()
+        sources = dict(data["sources"])
+        reddit = dict(sources.get("reddit", {}))
+        if reddit:
+            reddit.setdefault("backend", "apify")
+            sources["reddit"] = reddit
         return cls(
             name=data["name"],
             page_id=data["page_id"],
@@ -47,7 +52,7 @@ class Profile:
             timezone=data["timezone"],
             min_posts_required=data["min_posts_required"],
             max_sources_per_platform=data["max_sources_per_platform"],
-            sources=data["sources"],
+            sources=sources,
             filters=data.get("filters", {}),
             writing=writing,
         )

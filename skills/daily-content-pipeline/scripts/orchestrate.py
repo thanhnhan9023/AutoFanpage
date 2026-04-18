@@ -30,7 +30,6 @@ from autofanpage.state import LastSuccess
 SOURCE_SKILLS = {
     "youtube": "youtube-researcher",
     "perplexity": "perplexity-researcher",
-    "reddit": "reddit-researcher",
     "hackernews": "hackernews-researcher",
 }
 
@@ -69,7 +68,16 @@ def _enabled_sources(profile) -> list[str]:
     return [
         key for key in SOURCE_SKILLS
         if profile.sources.get(key, {}).get("enabled", False)
-    ]
+    ] + (
+        ["reddit"] if profile.sources.get("reddit", {}).get("enabled", False) else []
+    )
+
+
+def _source_skill_name(profile, key: str) -> str:
+    if key != "reddit":
+        return SOURCE_SKILLS[key]
+    backend = profile.sources.get("reddit", {}).get("backend", "apify")
+    return "reddit-researcher-apify" if backend == "apify" else "reddit-researcher"
 
 
 def _invoke(
@@ -96,7 +104,7 @@ def _dispatch_phase1(
 
     with ThreadPoolExecutor(max_workers=len(enabled) or 1) as pool:
         futures = [
-            pool.submit(_invoke, key, SOURCE_SKILLS[key], run_dir.path, profile_path)
+            pool.submit(_invoke, key, _source_skill_name(profile, key), run_dir.path, profile_path)
             for key in enabled
         ]
         for fut in as_completed(futures):

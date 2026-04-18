@@ -18,6 +18,12 @@ def env(tmp_path, fixtures_dir):
     }
 
 
+def _researcher_source(name: str) -> str:
+    if name == "reddit-researcher-apify":
+        return "reddit"
+    return name.replace("-researcher", "")
+
+
 def _fake_factory(failing: set[str]):
     calls: list[tuple[str, dict]] = []
 
@@ -103,7 +109,7 @@ def _fake_factory(failing: set[str]):
                 }],
             }))
             return {"status": "ok"}
-        key = name.replace("-researcher", "")
+        key = _researcher_source(name)
         if key in failing:
             from autofanpage.errors import SourceFailedError
             raise SourceFailedError(f"fake fail for {key}")
@@ -136,7 +142,7 @@ def test_happy_path_dispatches_all_4_sources(env, mocker):
 
     names = [c[0] for c in calls]
     for expected in ("youtube-researcher", "perplexity-researcher",
-                     "reddit-researcher", "hackernews-researcher"):
+                     "reddit-researcher-apify", "hackernews-researcher"):
         assert expected in names
     assert names.count("telegram-reporter") == 1
 
@@ -235,7 +241,7 @@ def test_empty_items_aborts_and_does_not_mark(env, mocker):
         calls.append((skill_name, args))
         if skill_name == "telegram-reporter":
             return {"status": "ok"}
-        source = skill_name.replace("-researcher", "")
+        source = _researcher_source(skill_name)
         run_dir = Path(args["run_dir"])
         run_dir.mkdir(parents=True, exist_ok=True)
         art_name = orchestrate.SOURCE_ARTIFACTS[source]
