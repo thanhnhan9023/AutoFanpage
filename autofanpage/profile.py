@@ -38,12 +38,12 @@ class Profile:
         writing_data = data.get("writing", {})
         writing = WritingConfig(**writing_data) if writing_data else WritingConfig()
         sources = dict(data["sources"])
-        reddit = dict(sources.get("reddit", {}))
-        perplexity = dict(sources.get("perplexity", {}))
-        if reddit:
+        if "reddit" in sources:
+            reddit = dict(sources.get("reddit", {}))
             reddit.setdefault("backend", "apify")
             sources["reddit"] = reddit
-        if perplexity:
+        if "perplexity" in sources:
+            perplexity = dict(sources.get("perplexity", {}))
             perplexity.setdefault("backend", "tavily")
             sources["perplexity"] = perplexity
         return cls(

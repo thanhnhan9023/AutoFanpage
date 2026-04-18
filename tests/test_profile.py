@@ -87,3 +87,15 @@ def test_profile_preserves_explicit_perplexity_backend(tmp_path, fixtures_dir):
     p = load_profile(str(p_path))
 
     assert p.sources["perplexity"]["backend"] == "perplexity"
+
+
+def test_profile_defaults_empty_perplexity_config_to_tavily(tmp_path, fixtures_dir):
+    import json
+    src = json.loads((fixtures_dir / "profile_plan2.json").read_text())
+    src["sources"]["perplexity"] = {}
+    p_path = tmp_path / "p.json"
+    p_path.write_text(json.dumps(src))
+
+    p = load_profile(str(p_path))
+
+    assert p.sources["perplexity"]["backend"] == "tavily"
