@@ -22,6 +22,7 @@ from autofanpage.sources.perplexity import (
 )
 
 CHAT_URL = "https://api.perplexity.ai/chat/completions"
+TAVILY_URL = "https://api.tavily.com/search"
 
 
 def _query(api_key: str, *, model: str, system: str, user: str) -> dict:
@@ -38,9 +39,24 @@ def _query(api_key: str, *, model: str, system: str, user: str) -> dict:
     )
 
 
+def _tavily_query(api_key: str, *, query: str) -> dict:
+    return post_json(
+        TAVILY_URL,
+        headers={"Authorization": f"Bearer {api_key}"},
+        json_body={
+            "query": query,
+            "search_depth": "basic",
+            "max_results": 10,
+            "include_answer": False,
+            "include_raw_content": False,
+        },
+    )
+
+
 def run(
     *,
     topic: str,
+    backend: str,
     api_key_ref: str,
     news_limit: int,
     reports_limit: int,
@@ -50,32 +66,62 @@ def run(
 ) -> dict:
     api_key = get_secret(api_key_ref)
 
-    news_resp = _query(
-        api_key, model="sonar-pro",
-        system="You are a news analyst. Respond with a numbered list of the most important articles, one per line, no prose.",
-        user=f"Top {news_limit} news stories today about: {topic}. Cite each.",
-    )
-    reports_resp = _query(
-        api_key, model="sonar",
-        system="You are an academic researcher. Respond with a numbered list of reports, one per line, no prose.",
-        user=f"Recent (2025-2026) research reports or white papers on: {topic}. "
-             f"List up to {reports_limit}. Cite each.",
-    )
-    news = shape_items(parse_completion(news_resp), limit=news_limit)
-    reports = shape_items(parse_completion(reports_resp), limit=reports_limit)
-
-    if twitter_enabled:
-        tw_resp = _query(
-            api_key, model="sonar-pro",
-            system="You report notable Twitter/X posts. Respond with a numbered list, one post per line. Only cite URLs under site:x.com or site:twitter.com.",
-            user=f"Top {twitter_limit} notable X/Twitter posts this week about: {topic}. "
-                 f"Only cite URLs on x.com or twitter.com.",
+    if backend == "tavily":
+        news = shape_tavily_results(
+            _tavily_query(api_key, query=f"Top news stories today about: {topic}"),
+            limit=news_limit,
         )
-        twitter = filter_twitter_urls(
-            shape_items(parse_completion(tw_resp), limit=twitter_limit)
+        reports = shape_tavily_results(
+            _tavily_query(
+                api_key,
+                query=(
+                    f"Recent (2025-2026) research reports or white papers on: {topic}"
+                ),
+            ),
+            limit=reports_limit,
         )
+        if twitter_enabled:
+            twitter = filter_twitter_urls(
+                shape_tavily_results(
+                    _tavily_query(
+                        api_key,
+                        query=(
+                            f"Top notable X/Twitter posts this week about: {topic} "
+                            "site:x.com OR site:twitter.com"
+                        ),
+                    ),
+                    limit=twitter_limit,
+                )
+            )
+        else:
+            twitter = []
     else:
-        twitter = []
+        news_resp = _query(
+            api_key, model="sonar-pro",
+            system="You are a news analyst. Respond with a numbered list of the most important articles, one per line, no prose.",
+            user=f"Top {news_limit} news stories today about: {topic}. Cite each.",
+        )
+        reports_resp = _query(
+            api_key, model="sonar",
+            system="You are an academic researcher. Respond with a numbered list of reports, one per line, no prose.",
+            user=f"Recent (2025-2026) research reports or white papers on: {topic}. "
+                 f"List up to {reports_limit}. Cite each.",
+        )
+        news = shape_items(parse_completion(news_resp), limit=news_limit)
+        reports = shape_items(parse_completion(reports_resp), limit=reports_limit)
+
+        if twitter_enabled:
+            tw_resp = _query(
+                api_key, model="sonar-pro",
+                system="You report notable Twitter/X posts. Respond with a numbered list, one post per line. Only cite URLs under site:x.com or site:twitter.com.",
+                user=f"Top {twitter_limit} notable X/Twitter posts this week about: {topic}. "
+                     f"Only cite URLs on x.com or twitter.com.",
+            )
+            twitter = filter_twitter_urls(
+                shape_items(parse_completion(tw_resp), limit=twitter_limit)
+            )
+        else:
+            twitter = []
 
     doc = {
         "source": "perplexity",
@@ -116,10 +162,17 @@ def main(argv: list[str] | None = None) -> int:
     twitter_enabled = (
         profile.sources.get("twitter_via_perplexity", {}).get("enabled", False)
     )
+    backend = cfg.get("backend", "tavily")
+    api_key_ref = (
+        "secret:tavily_api_key"
+        if backend == "tavily"
+        else "secret:perplexity_api_key"
+    )
     out_path = str(Path(args.run_dir) / "perplexity_results.json")
     result = run(
         topic=profile.topic,
-        api_key_ref="secret:perplexity_api_key",
+        backend=backend,
+        api_key_ref=api_key_ref,
         news_limit=5, reports_limit=3, twitter_limit=5,
         twitter_enabled=twitter_enabled,
         out_path=out_path,

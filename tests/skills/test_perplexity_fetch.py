@@ -10,6 +10,7 @@ sys.path.insert(0, str(SCRIPT))
 import fetch_perplexity  # noqa: E402
 
 CHAT_URL = "https://api.perplexity.ai/chat/completions"
+TAVILY_URL = "https://api.tavily.com/search"
 
 
 def _fake_resp(titles, urls):
@@ -38,6 +39,7 @@ def test_run_writes_news_reports_twitter(tmp_path, monkeypatch):
     out = tmp_path / "perplexity_results.json"
     result = fetch_perplexity.run(
         topic="AI automation business",
+        backend="perplexity",
         api_key_ref="secret:perplexity_api_key",
         news_limit=5, reports_limit=3, twitter_limit=5,
         twitter_enabled=True,
@@ -63,6 +65,7 @@ def test_run_skips_twitter_when_disabled(tmp_path, monkeypatch):
     out = tmp_path / "perplexity_results.json"
     fetch_perplexity.run(
         topic="AI",
+        backend="perplexity",
         api_key_ref="secret:perplexity_api_key",
         news_limit=5, reports_limit=3, twitter_limit=5,
         twitter_enabled=False,
@@ -91,6 +94,7 @@ def test_run_excludes_non_twitter_hosts_from_twitter_results(tmp_path, monkeypat
     out = tmp_path / "perplexity_results.json"
     fetch_perplexity.run(
         topic="AI",
+        backend="perplexity",
         api_key_ref="secret:perplexity_api_key",
         news_limit=5, reports_limit=3, twitter_limit=5,
         twitter_enabled=True,
@@ -106,6 +110,94 @@ def test_run_excludes_non_twitter_hosts_from_twitter_results(tmp_path, monkeypat
             "source": "x.com",
         },
     ]
+
+
+@responses.activate
+def test_run_uses_tavily_backend_by_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(fetch_perplexity, "get_secret", lambda ref: "tvly-XXX")
+
+    responses.add(
+        responses.POST,
+        TAVILY_URL,
+        json={
+            "results": [
+                {
+                    "title": "Launch recap",
+                    "url": "https://openai.com/blog/launch",
+                    "content": "Key release notes",
+                }
+            ]
+        },
+    )
+    responses.add(
+        responses.POST,
+        TAVILY_URL,
+        json={
+            "results": [
+                {
+                    "title": "AI Index 2026",
+                    "url": "https://stanford.edu/ai-index",
+                    "content": "Annual report",
+                }
+            ]
+        },
+    )
+
+    out = tmp_path / "perplexity_results.json"
+    result = fetch_perplexity.run(
+        topic="AI automation business",
+        backend="tavily",
+        api_key_ref="secret:tavily_api_key",
+        news_limit=5,
+        reports_limit=3,
+        twitter_limit=5,
+        twitter_enabled=False,
+        out_path=str(out),
+    )
+
+    assert result["status"] == "ok"
+    data = json.loads(out.read_text())
+    assert data["source"] == "perplexity"
+    assert len(data["news"]) == 1
+    assert len(data["reports"]) == 1
+    assert data["twitter"] == []
+    assert len(responses.calls) == 2
+
+
+@responses.activate
+def test_run_keeps_perplexity_backend_available(tmp_path, monkeypatch):
+    monkeypatch.setattr(fetch_perplexity, "get_secret", lambda ref: "pplx-XXX")
+
+    responses.add(
+        responses.POST,
+        CHAT_URL,
+        json=_fake_resp(["GPT-5 launches"], ["https://openai.com/x"]),
+    )
+    responses.add(
+        responses.POST,
+        CHAT_URL,
+        json=_fake_resp(["AI Index 2026"], ["https://stanford.edu/ai-index"]),
+    )
+
+    out = tmp_path / "perplexity_results.json"
+    result = fetch_perplexity.run(
+        topic="AI automation business",
+        backend="perplexity",
+        api_key_ref="secret:perplexity_api_key",
+        news_limit=5,
+        reports_limit=3,
+        twitter_limit=5,
+        twitter_enabled=False,
+        out_path=str(out),
+    )
+
+    assert result["status"] == "ok"
+    data = json.loads(out.read_text())
+    assert data["source"] == "perplexity"
+    assert len(data["news"]) == 1
+    assert len(data["reports"]) == 1
+    assert data["twitter"] == []
+    assert len(responses.calls) == 2
 
 
 def test_shape_tavily_results_deduplicates_and_limits():
