@@ -20,6 +20,9 @@ from autofanpage.secrets import get_secret
 
 
 DEFAULT_ACTOR_ID = "automation-lab/reddit-scraper"
+TITLE_MIN_CHARS = 12
+TITLE_MIN_WORDS = 3
+MAX_MEDIA_HEAVY_PER_SUB = 2
 
 
 def _actor_url(actor_id: str, token: str) -> str:
@@ -75,6 +78,62 @@ def _normalize_item(item: dict[str, Any], subreddit: str) -> dict[str, Any]:
     }
 
 
+def _is_media_heavy(external_url: str) -> bool:
+    lowered = (external_url or "").lower()
+    return (
+        "v.redd.it" in lowered
+        or "i.redd.it" in lowered
+        or "reddit.com/gallery" in lowered
+    )
+
+
+def _is_low_signal_title(title: str) -> bool:
+    words = [part for part in title.strip().split() if part]
+    return len(title.strip()) < TITLE_MIN_CHARS or len(words) < TITLE_MIN_WORDS
+
+
+def _quality_score(post: dict[str, Any]) -> float:
+    score = float(post["score"])
+    comments = float(post["num_comments"])
+    title = post["title"].strip()
+    external_url = post["external_url"]
+
+    rank = score
+    rank += min(comments, 600) * 8
+    if len(title) >= TITLE_MIN_CHARS:
+        rank += 500
+    if len(title.split()) >= TITLE_MIN_WORDS:
+        rank += 400
+    if post["is_self"] or not _is_media_heavy(external_url):
+        rank += 350
+    if _is_media_heavy(external_url):
+        rank -= 1800
+    if _is_low_signal_title(title):
+        rank -= 2200
+    return rank
+
+
+def _select_posts(normalized: list[dict[str, Any]], top_per_sub: int) -> list[dict[str, Any]]:
+    ranked = sorted(
+        normalized,
+        key=lambda post: (_quality_score(post), post["num_comments"], post["score"]),
+        reverse=True,
+    )
+    substantive = [post for post in ranked if not _is_media_heavy(post["external_url"])]
+    media_heavy = [post for post in ranked if _is_media_heavy(post["external_url"])]
+
+    selected: list[dict[str, Any]] = []
+    for post in substantive:
+        if len(selected) >= top_per_sub:
+            break
+        selected.append(post)
+
+    media_slots = min(MAX_MEDIA_HEAVY_PER_SUB, top_per_sub - len(selected))
+    selected.extend(media_heavy[:media_slots])
+
+    return selected[:top_per_sub]
+
+
 def run(
     *,
     actor_id: str,
@@ -103,8 +162,7 @@ def run(
             for item in items
             if int(item.get("score") or item.get("ups") or item.get("upvotes") or 0) >= min_score
         ]
-        normalized.sort(key=lambda post: post["score"], reverse=True)
-        all_items.extend(normalized[:top_per_sub])
+        all_items.extend(_select_posts(normalized, top_per_sub))
 
     if subreddits and len(failed) == len(subreddits):
         raise SourceFailedError(f"All subreddits failed: {failed}")
