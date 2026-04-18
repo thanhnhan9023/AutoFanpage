@@ -252,3 +252,89 @@ def test_filter_twitter_urls_keeps_only_x_hosts():
     ]
 
     assert fetch_perplexity.filter_twitter_urls(items) == items[:2]
+
+
+def test_run_rejects_unknown_backend(tmp_path, monkeypatch):
+    monkeypatch.setattr(fetch_perplexity, "get_secret", lambda ref: "unused")
+
+    with pytest.raises(ValueError, match="Unknown backend"):
+        fetch_perplexity.run(
+            topic="AI",
+            backend="invalid",
+            api_key_ref="secret:tavily_api_key",
+            news_limit=5,
+            reports_limit=3,
+            twitter_limit=5,
+            twitter_enabled=False,
+            out_path=str(tmp_path / "perplexity_results.json"),
+        )
+
+
+@pytest.mark.parametrize(
+    ("backend", "expected_secret"),
+    [
+        (None, "secret:tavily_api_key"),
+        ("perplexity", "secret:perplexity_api_key"),
+    ],
+)
+def test_main_selects_secret_for_backend_defaults(
+    tmp_path, monkeypatch, backend, expected_secret
+):
+    profile = type(
+        "Profile",
+        (),
+        {
+            "topic": "AI",
+            "sources": {
+                "perplexity": (
+                    {"enabled": True}
+                    if backend is None
+                    else {"enabled": True, "backend": backend}
+                ),
+                "twitter_via_perplexity": {"enabled": False},
+            },
+        },
+    )()
+    seen: dict[str, str] = {}
+
+    monkeypatch.setattr(fetch_perplexity, "load_profile", lambda path: profile)
+
+    def fake_run(**kwargs):
+        seen.update(kwargs)
+        return {"status": "ok"}
+
+    monkeypatch.setattr(fetch_perplexity, "run", fake_run)
+
+    rc = fetch_perplexity.main(
+        ["--run-dir", str(tmp_path), "--profile", str(tmp_path / "profile.yaml")]
+    )
+
+    assert rc == 0
+    assert seen["backend"] == (backend or "tavily")
+    assert seen["api_key_ref"] == expected_secret
+
+
+def test_main_rejects_unknown_backend_before_secret_selection(tmp_path, monkeypatch):
+    profile = type(
+        "Profile",
+        (),
+        {
+            "topic": "AI",
+            "sources": {
+                "perplexity": {"enabled": True, "backend": "invalid"},
+                "twitter_via_perplexity": {"enabled": False},
+            },
+        },
+    )()
+
+    monkeypatch.setattr(fetch_perplexity, "load_profile", lambda path: profile)
+
+    def fail_get_secret(ref):
+        raise AssertionError(f"get_secret should not be called, got {ref}")
+
+    monkeypatch.setattr(fetch_perplexity, "get_secret", fail_get_secret)
+
+    with pytest.raises(ValueError, match="Unknown backend"):
+        fetch_perplexity.main(
+            ["--run-dir", str(tmp_path), "--profile", str(tmp_path / "profile.yaml")]
+        )

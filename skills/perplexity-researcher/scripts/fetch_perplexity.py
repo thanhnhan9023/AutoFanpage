@@ -23,6 +23,7 @@ from autofanpage.sources.perplexity import (
 
 CHAT_URL = "https://api.perplexity.ai/chat/completions"
 TAVILY_URL = "https://api.tavily.com/search"
+VALID_BACKENDS = {"tavily", "perplexity"}
 
 
 def _query(api_key: str, *, model: str, system: str, user: str) -> dict:
@@ -53,6 +54,12 @@ def _tavily_query(api_key: str, *, query: str) -> dict:
     )
 
 
+def _validate_backend(backend: str) -> str:
+    if backend not in VALID_BACKENDS:
+        raise ValueError(f"Unknown backend: {backend}")
+    return backend
+
+
 def run(
     *,
     topic: str,
@@ -64,6 +71,7 @@ def run(
     twitter_enabled: bool,
     out_path: str,
 ) -> dict:
+    _validate_backend(backend)
     api_key = get_secret(api_key_ref)
 
     if backend == "tavily":
@@ -162,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     twitter_enabled = (
         profile.sources.get("twitter_via_perplexity", {}).get("enabled", False)
     )
-    backend = cfg.get("backend", "tavily")
+    backend = _validate_backend(cfg.get("backend", "tavily"))
     api_key_ref = (
         "secret:tavily_api_key"
         if backend == "tavily"
