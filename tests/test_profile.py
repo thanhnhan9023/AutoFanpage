@@ -63,3 +63,15 @@ def test_profile_defaults_reddit_backend_to_apify(tmp_path, fixtures_dir):
     p = load_profile(str(p_path))
 
     assert p.sources["reddit"]["backend"] == "apify"
+
+
+def test_profile_defaults_perplexity_backend_to_tavily(tmp_path, fixtures_dir):
+    import json
+    src = json.loads((fixtures_dir / "profile_plan2.json").read_text())
+    src["sources"]["perplexity"].pop("backend", None)
+    p_path = tmp_path / "p.json"
+    p_path.write_text(json.dumps(src))
+
+    p = load_profile(str(p_path))
+
+    assert p.sources["perplexity"]["backend"] == "tavily"

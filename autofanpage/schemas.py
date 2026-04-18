@@ -35,6 +35,15 @@ PROFILE_SCHEMA: dict[str, Any] = {
             "required": ["youtube", "perplexity", "twitter_via_perplexity",
                          "reddit", "hackernews"],
             "properties": {
+                "perplexity": {
+                    "type": "object",
+                    "properties": {
+                        "backend": {
+                            "type": "string",
+                            "enum": ["tavily", "perplexity"],
+                        },
+                    },
+                },
                 "reddit": {
                     "type": "object",
                     "properties": {
