@@ -14,7 +14,12 @@ from autofanpage.http import post_json
 from autofanpage.profile import load_profile
 from autofanpage.schemas import validate
 from autofanpage.secrets import get_secret
-from autofanpage.sources.perplexity import parse_completion, shape_items
+from autofanpage.sources.perplexity import (
+    filter_twitter_urls,
+    parse_completion,
+    shape_items,
+    shape_tavily_results,
+)
 
 CHAT_URL = "https://api.perplexity.ai/chat/completions"
 

@@ -5,8 +5,6 @@ from pathlib import Path
 import pytest
 import responses
 
-from autofanpage.sources import perplexity
-
 SCRIPT = Path(__file__).resolve().parents[2] / "skills" / "perplexity-researcher" / "scripts"
 sys.path.insert(0, str(SCRIPT))
 import fetch_perplexity  # noqa: E402
@@ -76,7 +74,7 @@ def test_run_skips_twitter_when_disabled(tmp_path, monkeypatch):
 
 
 def test_shape_tavily_results_deduplicates_and_limits():
-    items = perplexity.shape_tavily_results(
+    items = fetch_perplexity.shape_tavily_results(
         {
             "results": [
                 {
@@ -126,4 +124,4 @@ def test_filter_twitter_urls_keeps_only_x_hosts():
         },
     ]
 
-    assert perplexity.filter_twitter_urls(items) == items[:2]
+    assert fetch_perplexity.filter_twitter_urls(items) == items[:2]
