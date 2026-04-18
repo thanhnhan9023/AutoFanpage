@@ -173,6 +173,14 @@ def test_full_pipeline_publishes_and_reports_scheduled_count(env, mocker):
     assert telegram[-1][1]["status"] == "success"
     assert telegram[-1][1]["details"]["posts_scheduled"] == 4
 
+    run_log = (
+        Path(env["base"]) / "runs" / env["page"] / "2026-04-16" / "run.log"
+    ).read_text(encoding="utf-8")
+    assert (
+        "phase4 facebook-publisher complete "
+        "dry_run=False publish_results=publish_results.json scheduled=4"
+    ) in run_log
+
 
 def test_dry_run_skips_publish_sends_preview(env, mocker):
     fake, calls = _full_fake()

@@ -317,6 +317,10 @@ def main(argv: list[str] | None = None) -> int:
             1 for post in pub_results["posts"] if post["status"] == 200
         )
         run_dir.log(f"publish scheduled={posts_scheduled}")
+        run_dir.log(
+            "phase4 facebook-publisher complete "
+            f"dry_run=False publish_results=publish_results.json scheduled={posts_scheduled}"
+        )
 
         elapsed = int(time.monotonic() - started)
         state.mark(date=date, run_dir=str(run_dir.path),
