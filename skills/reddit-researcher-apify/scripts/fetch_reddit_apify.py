@@ -7,6 +7,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 _ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_ROOT))
@@ -18,20 +19,24 @@ from autofanpage.schemas import validate
 from autofanpage.secrets import get_secret
 
 
-DEFAULT_ACTOR_ID = "good-apis/reddit-scraper"
+DEFAULT_ACTOR_ID = "automation-lab/reddit-scraper"
 
 
 def _actor_url(actor_id: str, token: str) -> str:
-    return f"https://api.apify.com/v2/acts/{actor_id}/run-sync-get-dataset-items?token={token}"
+    actor_ref = actor_id.replace("/", "~")
+    return (
+        f"https://api.apify.com/v2/acts/{quote(actor_ref, safe='~')}"
+        f"/run-sync-get-dataset-items?token={token}"
+    )
 
 
 def _actor_input(subreddit: str, time_filter: str, top_per_sub: int) -> dict[str, Any]:
     return {
-        "mode": "subreddit_posts",
-        "subreddit": subreddit,
+        "urls": [f"https://www.reddit.com/r/{subreddit}/top/?t={time_filter}"],
         "sort": "top",
-        "time": time_filter,
-        "limit": max(top_per_sub * 3, 15),
+        "timeFilter": time_filter,
+        "maxPostsPerSource": max(top_per_sub * 3, 15),
+        "includeComments": False,
     }
 
 
@@ -50,7 +55,12 @@ def _normalize_item(item: dict[str, Any], subreddit: str) -> dict[str, Any]:
         permalink = item.get("permalink") or ""
     else:
         url = f"https://reddit.com{permalink}" if permalink else item.get("url", "")
-    external_url = item.get("externalUrl") or item.get("outboundUrl") or item.get("url", "")
+    external_url = (
+        item.get("externalUrl")
+        or item.get("outboundUrl")
+        or item.get("link")
+        or item.get("url", "")
+    )
     return {
         "title": item.get("title") or item.get("postTitle") or "",
         "url": url,
