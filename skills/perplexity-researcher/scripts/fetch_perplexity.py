@@ -89,18 +89,19 @@ def run(
             limit=reports_limit,
         )
         if twitter_enabled:
+            twitter_resp = _tavily_query(
+                api_key,
+                query=(
+                    f"Top notable X/Twitter posts this week about: {topic} "
+                    "site:x.com OR site:twitter.com"
+                ),
+            )
             twitter = filter_twitter_urls(
                 shape_tavily_results(
-                    _tavily_query(
-                        api_key,
-                        query=(
-                            f"Top notable X/Twitter posts this week about: {topic} "
-                            "site:x.com OR site:twitter.com"
-                        ),
-                    ),
-                    limit=twitter_limit,
+                    twitter_resp,
+                    limit=len(twitter_resp.get("results", [])),
                 )
-            )
+            )[:twitter_limit]
         else:
             twitter = []
     else:
@@ -125,8 +126,9 @@ def run(
                 user=f"Top {twitter_limit} notable X/Twitter posts this week about: {topic}. "
                      f"Only cite URLs on x.com or twitter.com.",
             )
-            twitter = filter_twitter_urls(
-                shape_items(parse_completion(tw_resp), limit=twitter_limit)
+            twitter = shape_items(
+                filter_twitter_urls(parse_completion(tw_resp)),
+                limit=twitter_limit,
             )
         else:
             twitter = []
