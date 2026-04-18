@@ -71,10 +71,9 @@ def run(
             user=f"Top {twitter_limit} notable X/Twitter posts this week about: {topic}. "
                  f"Only cite URLs on x.com or twitter.com.",
         )
-        twitter = [
-            i for i in shape_items(parse_completion(tw_resp), limit=twitter_limit)
-            if "x.com" in i["source"] or "twitter.com" in i["source"]
-        ]
+        twitter = filter_twitter_urls(
+            shape_items(parse_completion(tw_resp), limit=twitter_limit)
+        )
     else:
         twitter = []
 

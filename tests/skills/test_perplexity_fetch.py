@@ -73,6 +73,41 @@ def test_run_skips_twitter_when_disabled(tmp_path, monkeypatch):
     assert len(responses.calls) == 2
 
 
+@responses.activate
+def test_run_excludes_non_twitter_hosts_from_twitter_results(tmp_path, monkeypatch):
+    monkeypatch.setattr(fetch_perplexity, "get_secret", lambda ref: "pplx-XXX")
+
+    responses.add(responses.POST, CHAT_URL, json=_fake_resp(
+        ["n1"], ["https://a.com/1"],
+    ))
+    responses.add(responses.POST, CHAT_URL, json=_fake_resp(
+        ["r1"], ["https://b.com/1"],
+    ))
+    responses.add(responses.POST, CHAT_URL, json=_fake_resp(
+        ["real post", "fake post"],
+        ["https://x.com/sama/status/1", "https://notx.com/post/2"],
+    ))
+
+    out = tmp_path / "perplexity_results.json"
+    fetch_perplexity.run(
+        topic="AI",
+        api_key_ref="secret:perplexity_api_key",
+        news_limit=5, reports_limit=3, twitter_limit=5,
+        twitter_enabled=True,
+        out_path=str(out),
+    )
+
+    data = json.loads(out.read_text())
+    assert data["twitter"] == [
+        {
+            "title": "real post",
+            "url": "https://x.com/sama/status/1",
+            "summary": "",
+            "source": "x.com",
+        },
+    ]
+
+
 def test_shape_tavily_results_deduplicates_and_limits():
     items = fetch_perplexity.shape_tavily_results(
         {
