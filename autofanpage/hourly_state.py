@@ -7,7 +7,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from autofanpage.errors import SchemaError
 from autofanpage.schemas import validate
+
+
+def _safe_segment(value: str) -> str:
+    candidate = Path(value)
+    if candidate.is_absolute() or len(candidate.parts) != 1:
+        raise ValueError(f"invalid path segment: {value!r}")
+    part = candidate.parts[0]
+    if part in {"", ".", ".."}:
+        raise ValueError(f"invalid path segment: {value!r}")
+    return part
 
 
 @dataclass(frozen=True)
@@ -17,12 +28,22 @@ class LatestRepostedSource:
 
     @property
     def path(self) -> Path:
-        return Path(self.base) / "state" / self.page / "latest_reposted_source.json"
+        return (
+            Path(self.base)
+            / "state"
+            / _safe_segment(self.page)
+            / "latest_reposted_source.json"
+        )
 
     def read(self) -> dict[str, Any] | None:
         if not self.path.exists():
             return None
-        return json.loads(self.path.read_text())
+        try:
+            payload = json.loads(self.path.read_text())
+            validate("latest_reposted_source", payload)
+        except (OSError, json.JSONDecodeError, SchemaError):
+            return None
+        return payload
 
     def mark(
         self,
