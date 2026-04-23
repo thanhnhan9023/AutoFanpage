@@ -408,3 +408,60 @@ def test_publish_results_allows_null_ids_for_failed_slots():
              "comment_id": None, "status": 400},
         ],
     })
+
+
+def test_latest_source_post_schema_accepts_valid():
+    validate("latest_source_post", {
+        "source_page_url": "https://www.facebook.com/0xSojalSec",
+        "source_post_id": "1234567890",
+        "source_post_url": "https://www.facebook.com/0xSojalSec/posts/1234567890",
+        "author": "0xSojalSec",
+        "published_at": "2026-04-15T06:00:00+07:00",
+        "content_text": "Latest post text",
+        "media_urls": ["https://example.com/image.jpg"],
+        "backend": "browser_use_mcp",
+        "fetched_at": "2026-04-15T06:05:00+07:00",
+    })
+
+
+def test_latest_source_post_schema_rejects_missing_required_field():
+    with pytest.raises(SchemaError):
+        validate("latest_source_post", {
+            "source_page_url": "https://www.facebook.com/0xSojalSec",
+            "source_post_id": "1234567890",
+            "source_post_url": "https://www.facebook.com/0xSojalSec/posts/1234567890",
+            "author": "0xSojalSec",
+            "published_at": "2026-04-15T06:00:00+07:00",
+            "media_urls": ["https://example.com/image.jpg"],
+            "backend": "browser_use_mcp",
+            "fetched_at": "2026-04-15T06:05:00+07:00",
+        })
+
+
+def test_repost_decision_schema_accepts_valid():
+    validate("repost_decision", {
+        "action": "publish",
+        "reason": "New source post found",
+        "source_post_id": "1234567890",
+        "source_post_url": "https://www.facebook.com/0xSojalSec/posts/1234567890",
+    })
+
+
+def test_repost_decision_schema_rejects_unknown_action():
+    with pytest.raises(SchemaError):
+        validate("repost_decision", {
+            "action": "repost",
+            "reason": "Unknown action",
+            "source_post_id": "1234567890",
+            "source_post_url": "https://www.facebook.com/0xSojalSec/posts/1234567890",
+        })
+
+
+def test_latest_reposted_source_schema_rejects_missing_run_dir():
+    with pytest.raises(SchemaError):
+        validate("latest_reposted_source", {
+            "source_post_id": "1234567890",
+            "source_post_url": "https://www.facebook.com/0xSojalSec/posts/1234567890",
+            "published_at": "2026-04-15T06:00:00+07:00",
+            "reposted_at": "2026-04-15T06:10:00+07:00",
+        })
