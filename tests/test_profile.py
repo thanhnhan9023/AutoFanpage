@@ -115,3 +115,18 @@ def test_profile_keeps_empty_reddit_config_unset_while_defaulting_perplexity(
 
     assert "backend" not in p.sources["reddit"]
     assert p.sources["perplexity"]["backend"] == "tavily"
+
+
+def test_profile_loads_hourly_writing_style(fixtures_dir):
+    p = load_profile(fixtures_dir / "profile_hourly_facebook_repost.json")
+    assert p.writing.style == "ai5phut"
+
+
+def test_profile_defaults_facebook_page_latest_backend_to_browser_use_mcp(fixtures_dir):
+    p = load_profile(fixtures_dir / "profile_hourly_facebook_repost.json")
+    assert p.sources["facebook_page_latest"]["backend"] == "browser_use_mcp"
+
+
+def test_profile_exposes_optional_publishing_backend_for_preflight(fixtures_dir):
+    p = load_profile(fixtures_dir / "profile_hourly_facebook_repost.json")
+    assert p.publishing_backend == "facebook_graph"

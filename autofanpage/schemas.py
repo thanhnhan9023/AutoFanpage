@@ -30,6 +30,16 @@ PROFILE_SCHEMA: dict[str, Any] = {
         "filters": {"type": "object"},
         "min_posts_required": {"type": "integer", "minimum": 0, "maximum": 4},
         "max_sources_per_platform": {"type": "integer", "minimum": 1},
+        "writing": {
+            "type": "object",
+            "properties": {
+                "model": {"type": "string"},
+                "max_tokens": {"type": "integer", "minimum": 1},
+                "temperature": {"type": "number"},
+                "api_key_ref": {"type": "string", "pattern": r"^secret:"},
+                "style": {"type": "string", "enum": ["ai5phut"]},
+            },
+        },
         "sources": {
             "type": "object",
             "required": ["youtube", "perplexity", "twitter_via_perplexity",
@@ -48,6 +58,22 @@ PROFILE_SCHEMA: dict[str, Any] = {
                     "type": "object",
                     "properties": {
                         "backend": {"type": "string", "enum": ["apify", "oauth"]},
+                    },
+                },
+                "facebook_page_latest": {
+                    "type": "object",
+                    "required": ["enabled", "page_url"],
+                    "properties": {
+                        "enabled": {"type": "boolean"},
+                        "backend": {
+                            "type": "string",
+                            "enum": ["browser_use_mcp", "agent_browser"],
+                        },
+                        "page_url": {"type": "string", "minLength": 1},
+                        "browser_use_profile_id": {"type": "string"},
+                        "agent_browser_profile": {"type": "string"},
+                        "agent_browser_session_name": {"type": "string"},
+                        "agent_browser_state_path": {"type": "string"},
                     },
                 },
             },

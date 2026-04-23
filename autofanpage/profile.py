@@ -16,6 +16,7 @@ class WritingConfig:
     max_tokens: int = 900
     temperature: float = 0.7
     api_key_ref: str = "secret:anthropic_api_key"
+    style: str | None = None
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,7 @@ class Profile:
     sources: dict[str, Any]
     filters: dict[str, Any] = field(default_factory=dict)
     writing: WritingConfig = field(default_factory=WritingConfig)
+    publishing_backend: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Profile":
@@ -46,6 +48,11 @@ class Profile:
             perplexity = dict(sources.get("perplexity", {}))
             perplexity.setdefault("backend", "tavily")
             sources["perplexity"] = perplexity
+        fb_latest = dict(sources.get("facebook_page_latest", {}))
+        if fb_latest:
+            fb_latest.setdefault("backend", "browser_use_mcp")
+            sources["facebook_page_latest"] = fb_latest
+        publishing = data.get("publishing", {})
         return cls(
             name=data["name"],
             page_id=data["page_id"],
@@ -59,6 +66,7 @@ class Profile:
             sources=sources,
             filters=data.get("filters", {}),
             writing=writing,
+            publishing_backend=publishing.get("backend"),
         )
 
 
