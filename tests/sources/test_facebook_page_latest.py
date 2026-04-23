@@ -199,15 +199,21 @@ def test_run_browser_use_task_uses_mcporter_args_flag(monkeypatch):
     ]
 
 
-def test_run_agent_browser_extract_uses_open_wait_eval_flow(monkeypatch):
+def test_run_agent_browser_extract_uses_two_stage_open_wait_eval_flow(monkeypatch):
     calls: list[list[str]] = []
 
     def fake_run(cmd, **kwargs):
         calls.append(cmd)
         if "eval" in cmd:
+            if len(calls) == 3:
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout='"https://www.facebook.com/0xSojalSec/posts/123"',
+                    stderr="",
+                )
             return SimpleNamespace(
                 returncode=0,
-                stdout='{"source_page_url":"https://www.facebook.com/0xSojalSec","source_post_url":"https://www.facebook.com/0xSojalSec/posts/123","published_at":"2026-04-23T09:15:00Z","content_text":"A useful post","author":"0xSojalSec","media_urls":[]}',
+                stdout='{"source_page_url":"https://www.facebook.com/0xSojalSec","source_post_url":"https://www.facebook.com/0xSojalSec/posts/123","published_at":"2026-04-23T09:15:00Z","content_text":"A useful post from the post detail page","author":"0xSojalSec","media_urls":[]}',
                 stderr="",
             )
         return SimpleNamespace(returncode=0, stdout="", stderr="")
@@ -222,7 +228,8 @@ def test_run_agent_browser_extract_uses_open_wait_eval_flow(monkeypatch):
     )
 
     assert result["source_post_url"] == "https://www.facebook.com/0xSojalSec/posts/123"
-    assert len(calls) == 3
+    assert result["content_text"] == "A useful post from the post detail page"
+    assert len(calls) == 6
     assert calls[0] == [
         "agent-browser",
         "--profile",
@@ -256,8 +263,53 @@ def test_run_agent_browser_extract_uses_open_wait_eval_flow(monkeypatch):
         "/tmp/state.json",
         "eval",
     ]
+    assert calls[3] == [
+        "agent-browser",
+        "--profile",
+        "facebook-profile",
+        "--session-name",
+        "session-1",
+        "--state",
+        "/tmp/state.json",
+        "open",
+        "https://www.facebook.com/0xSojalSec/posts/123",
+    ]
+    assert calls[4] == [
+        "agent-browser",
+        "--profile",
+        "facebook-profile",
+        "--session-name",
+        "session-1",
+        "--state",
+        "/tmp/state.json",
+        "wait",
+        "--load",
+        "networkidle",
+    ]
+    assert calls[5][:8] == [
+        "agent-browser",
+        "--profile",
+        "facebook-profile",
+        "--session-name",
+        "session-1",
+        "--state",
+        "/tmp/state.json",
+        "eval",
+    ]
     assert "--json" not in calls[0]
     assert "--json" not in calls[1]
+
+
+def test_run_agent_browser_extract_fails_when_latest_post_url_not_found(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        if "eval" in cmd:
+            return SimpleNamespace(returncode=0, stdout='""', stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    with pytest.raises(SourceFailedError, match="latest post URL"):
+        run_agent_browser_extract(page_url="https://www.facebook.com/0xSojalSec")
 
 
 def test_run_browser_use_task_maps_subprocess_timeout(monkeypatch):

@@ -6,6 +6,33 @@ import subprocess
 from autofanpage.errors import SourceFailedError
 
 _AGENT_BROWSER_TIMEOUT_SECONDS = 60
+_LATEST_POST_URL_JS = """
+(() => {
+  const normalize = (href) => {
+    if (typeof href !== "string" || !href.trim()) return "";
+    try {
+      return new URL(href, window.location.href).toString();
+    } catch (_err) {
+      return "";
+    }
+  };
+  const isPostUrl = (href) =>
+    href.includes("/posts/") ||
+    href.includes("story_fbid=") ||
+    href.includes("/permalink/");
+
+  const links = Array.from(document.querySelectorAll('a[href]'));
+  for (const link of links) {
+    const url = normalize(link.getAttribute("href") || "");
+    if (!url || !isPostUrl(url)) continue;
+    if (!url.startsWith("https://www.facebook.com/") && !url.startsWith("https://facebook.com/")) {
+      continue;
+    }
+    return url;
+  }
+  return "";
+})()
+""".strip()
 _EXTRACTION_JS = """
 (() => {
   const text = (value) => typeof value === "string" ? value.trim() : "";
@@ -31,6 +58,18 @@ _EXTRACTION_JS = """
   };
 })()
 """.strip()
+
+
+def _parse_agent_browser_json(raw_output: str, *, invalid_message: str) -> str | dict:
+    try:
+        payload = json.loads(raw_output)
+    except json.JSONDecodeError as exc:
+        raise SourceFailedError(f"{invalid_message}: {exc}") from exc
+    if isinstance(payload, str):
+        return payload.strip()
+    if not isinstance(payload, dict):
+        raise SourceFailedError("agent_browser returned non-object JSON")
+    return payload
 
 
 def _run_agent_browser_command(
@@ -79,22 +118,29 @@ def run_agent_browser_extract(
 
     _run_agent_browser_command(base_cmd=base_cmd, step_args=["open", page_url])
     _run_agent_browser_command(base_cmd=base_cmd, step_args=["wait", "--load", "networkidle"])
-    raw_output = _run_agent_browser_command(
+    latest_post_raw = _run_agent_browser_command(
+        base_cmd=base_cmd,
+        step_args=["eval", _LATEST_POST_URL_JS],
+        json_output=True,
+    )
+    latest_post_url = _parse_agent_browser_json(
+        latest_post_raw,
+        invalid_message="agent_browser returned invalid latest-post JSON",
+    )
+    if not isinstance(latest_post_url, str) or not latest_post_url:
+        raise SourceFailedError("agent_browser could not find latest post URL")
+
+    _run_agent_browser_command(base_cmd=base_cmd, step_args=["open", latest_post_url])
+    _run_agent_browser_command(base_cmd=base_cmd, step_args=["wait", "--load", "networkidle"])
+    extraction_raw = _run_agent_browser_command(
         base_cmd=base_cmd,
         step_args=["eval", _EXTRACTION_JS],
         json_output=True,
     )
-    try:
-        payload = json.loads(raw_output)
-    except json.JSONDecodeError as exc:
-        raise SourceFailedError(f"agent_browser returned invalid JSON: {exc}") from exc
+    payload = _parse_agent_browser_json(
+        extraction_raw,
+        invalid_message="agent_browser returned invalid extraction JSON",
+    )
     if isinstance(payload, str):
-        try:
-            payload = json.loads(payload)
-        except json.JSONDecodeError as exc:
-            raise SourceFailedError(
-                f"agent_browser eval returned invalid JSON string: {exc}"
-            ) from exc
-    if not isinstance(payload, dict):
-        raise SourceFailedError("agent_browser returned non-object JSON")
+        raise SourceFailedError("agent_browser extraction returned string instead of object")
     return payload
