@@ -41,7 +41,12 @@ Non-goals:
 - backfilling older source posts
 - implementing Mixpost publishing in this scope
 
-The existing publisher path remains the one already implemented in this repo. Profiles may still contain extra runtime-only fields such as `publishing`, but this feature does not depend on them.
+Precondition for this scope:
+
+- the destination page profile used by the hourly workflow must be loadable by this repo's current profile model
+- the destination page must be publishable by the repo's current `facebook-publisher`, which today means direct Graph-style publishing via `page_id` + `access_token_ref`
+
+Profiles that depend on runtime-only `publishing.mixpost` behavior are outside this feature's scope. If the real destination page requires that runtime path, the separate publishing-profile support must land first or the hourly workflow must target a Graph-compatible page profile.
 
 ---
 
@@ -87,6 +92,23 @@ The environment already has working access to Browser Use cloud through MCP/mcpo
 
 The user also asked for an additional option using `agent-browser`. That option should exist as an alternative fetch backend for the same source contract.
 
+### 2.5 Current publisher and reporter constraints
+
+The current repo publisher path is still:
+
+- load profile
+- read `page_id`
+- resolve `access_token_ref`
+- schedule via direct Facebook Graph API
+
+The current Telegram success formatter also expects the standard success keys:
+
+- `posts_scheduled`
+- `date`
+- `elapsed_sec`
+
+The hourly design must preserve those required fields even if it adds extra source-specific context.
+
 ---
 
 ## 3. Proposed Design
@@ -129,9 +151,10 @@ Rules:
   - `agent_browser`
 - if the source exists and `backend` is omitted, default to `browser_use_mcp`
 - `page_url` is required
-- this source is intended for public pages; no login is required for the upstream fetch
+- the source should attempt public-page extraction first
+- if Facebook responds with a login wall, degraded markup, or region-dependent content, the backend may use an authenticated browser session/profile as a fallback
 
-The rest of the existing Phase 1 sources may be disabled in the hourly profile.
+To minimize schema churn in this phase, the hourly profile should keep the existing legacy source keys present with `enabled: false`, and add `facebook_page_latest` as the only enabled source. This avoids a large profile-schema redesign while still giving the user a single active upstream source.
 
 ### 3.3 Source artifact contract
 
@@ -182,6 +205,8 @@ Why this is the default:
 - structured output is a better fit for Python pipeline code than shelling out to a separate CLI
 - it avoids DOM parsing logic in repo code
 
+Optional authenticated fallback configuration may be added for this backend, for example a Browser Use cloud profile id, but the artifact contract stays unchanged whether the fetch is public or authenticated.
+
 ### 3.5 Fetch backend: `agent_browser`
 
 Implementation shape:
@@ -196,6 +221,8 @@ The exact command sequence is an implementation detail, but it must satisfy two 
 2. it must return a normalized artifact matching `latest_source_post.json`
 
 This backend is an operator-selected alternative, not the default.
+
+For parity with the MCP backend, `agent_browser` may use an authenticated state/profile/session fallback when public extraction is blocked by Facebook.
 
 ### 3.6 Hourly idempotency and skip behavior
 
@@ -344,6 +371,8 @@ This design intentionally does **not** add new publishing adapters. The hourly p
 
 That keeps this feature focused on the source + rewrite workflow.
 
+Because the current publisher is Graph-only in this repo, the hourly pipeline must fail fast during preflight if the selected destination profile is not compatible with that path. This is a deliberate guardrail, not a runtime surprise.
+
 ### 3.11 Reporting
 
 Reuse `telegram-reporter` where possible.
@@ -362,11 +391,19 @@ Expected statuses:
 
 Suggested success details:
 
+- `posts_scheduled`
+- `date`
+- `elapsed_sec`
 - source page
 - source post URL
 - source published time
 - fetch backend used
-- posts scheduled: `1`
+
+Implementation rule:
+
+- keep the existing required success fields used by `autofanpage/telegram.py`
+- extend the formatter only with optional hourly fields such as `source_post_url`, `source_page_url`, `source_published_at`, and `fetch_backend`
+- `info` skip messages may continue to use the existing free-form `message` field
 
 ---
 
@@ -382,9 +419,14 @@ Suggested success details:
   - allow `sources.facebook_page_latest`
   - validate allowed backend values
   - allow `writing.style`
+  - keep the legacy Phase 1 source keys required in this phase, so hourly profiles must include them with `enabled: false`
 
 - `autofanpage/prompts.py`
   - add style-aware repost prompt builder or shared helpers for `ai5phut`
+
+- `autofanpage/telegram.py`
+  - preserve the existing success payload contract
+  - append optional hourly source details when present
 
 ### 4.2 New modules / skills
 
@@ -417,9 +459,9 @@ Optional:
 Add or update one profile fixture showing:
 
 - `writing.style = "ai5phut"`
-- only `facebook_page_latest` enabled
+- `facebook_page_latest` enabled
+- `youtube`, `perplexity`, `twitter_via_perplexity`, `reddit`, `hackernews` present with `enabled: false`
 - page URL = `https://www.facebook.com/0xSojalSec`
-- all other sources disabled
 
 This fixture can be derived from the runtime `page_test_ai5phut_live_headless.json`, but the repo-owned test fixture should be minimal and focused on the new hourly flow.
 
@@ -432,6 +474,7 @@ This fixture can be derived from the runtime `page_test_ai5phut_live_headless.js
 - MCP failure / Browser Use error
 - `agent-browser` missing from `PATH`
 - Facebook page markup did not yield a usable top post
+- Facebook served a login wall and no authenticated fallback session/profile was available
 
 Behavior:
 
@@ -474,6 +517,14 @@ If publish fails:
 
 This is important: source dedupe should reflect completed publish, not just completed rewrite.
 
+### 5.6 Unsupported destination publishing profile
+
+If the selected destination profile cannot be published by the repo's current Graph-based publisher:
+
+- fail the run during preflight
+- emit a clear error explaining that the hourly workflow currently requires a Graph-compatible destination profile
+- do not attempt fetch, rewrite, or publish
+
 ---
 
 ## 6. Testing Strategy
@@ -487,6 +538,7 @@ This is important: source dedupe should reflect completed publish, not just comp
 - `tests/test_schemas.py`
   - accept valid `facebook_page_latest`
   - reject unknown backend values
+  - keep legacy source keys required and validate the hourly fixture shape with those keys disabled
 
 ### 6.2 Source normalization tests
 
@@ -510,6 +562,7 @@ This is important: source dedupe should reflect completed publish, not just comp
   - duplicate source post -> writer/publisher skipped
   - publish failure does not mark repost state
   - successful publish updates repost state
+  - unsupported destination publishing profile fails during preflight
 
 ### 6.5 Verification expectations
 
