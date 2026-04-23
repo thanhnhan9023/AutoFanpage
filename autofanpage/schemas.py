@@ -132,6 +132,67 @@ LAST_SUCCESS_SCHEMA: dict[str, Any] = {
 }
 
 
+LATEST_SOURCE_POST_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": [
+        "source_page_url",
+        "source_post_id",
+        "source_post_url",
+        "author",
+        "published_at",
+        "content_text",
+        "media_urls",
+        "backend",
+        "fetched_at",
+    ],
+    "properties": {
+        "source_page_url": {"type": "string"},
+        "source_post_id": {"type": ["string", "null"]},
+        "source_post_url": {"type": "string"},
+        "author": {"type": "string"},
+        "published_at": {"type": "string"},
+        "content_text": {"type": "string", "minLength": 1},
+        "media_urls": {"type": "array", "items": {"type": "string"}},
+        "backend": {
+            "type": "string",
+            "enum": ["browser_use_mcp", "agent_browser"],
+        },
+        "fetched_at": {"type": "string"},
+    },
+}
+
+
+LATEST_REPOSTED_SOURCE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": [
+        "source_post_id",
+        "source_post_url",
+        "published_at",
+        "reposted_at",
+        "run_dir",
+    ],
+    "properties": {
+        "source_post_id": {"type": ["string", "null"]},
+        "source_post_url": {"type": "string"},
+        "published_at": {"type": "string"},
+        "reposted_at": {"type": "string"},
+        "run_dir": {"type": "string"},
+    },
+}
+
+
+REPOST_DECISION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": ["action", "reason"],
+    "properties": {
+        "action": {"type": "string", "enum": ["publish", "skip_duplicate"]},
+        "reason": {"type": "string"},
+        "source_post_id": {"type": ["string", "null"]},
+        "source_post_url": {"type": "string"},
+    },
+}
+
+
 YOUTUBE_RESULTS_SCHEMA = {
     "type": "object",
     "required": ["source", "fetched_at", "items"],
@@ -402,6 +463,9 @@ _SCHEMAS = {
     "profile": PROFILE_SCHEMA,
     "hackernews_results": HACKERNEWS_RESULTS_SCHEMA,
     "last_success": LAST_SUCCESS_SCHEMA,
+    "latest_source_post": LATEST_SOURCE_POST_SCHEMA,
+    "latest_reposted_source": LATEST_REPOSTED_SOURCE_SCHEMA,
+    "repost_decision": REPOST_DECISION_SCHEMA,
     "youtube_results": YOUTUBE_RESULTS_SCHEMA,
     "perplexity_results": PERPLEXITY_RESULTS_SCHEMA,
     "reddit_results": REDDIT_RESULTS_SCHEMA,
