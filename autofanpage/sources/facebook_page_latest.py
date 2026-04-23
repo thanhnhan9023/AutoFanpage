@@ -35,10 +35,18 @@ def _extract_post_id(raw: dict[str, Any]) -> str | None:
     return None
 
 
+def _require_non_empty(raw: dict[str, Any], field_name: str) -> str:
+    value = str(raw.get(field_name) or "").strip()
+    if not value:
+        raise SourceFailedError(f"latest source post missing {field_name}")
+    return value
+
+
 def normalize_latest_post(raw: dict[str, Any], *, backend: str) -> dict[str, Any]:
-    content_text = str(raw.get("content_text") or "").strip()
-    if not content_text:
-        raise SourceFailedError("latest source post missing content_text")
+    source_page_url = _require_non_empty(raw, "source_page_url")
+    source_post_url = _require_non_empty(raw, "source_post_url")
+    published_at = _require_non_empty(raw, "published_at")
+    content_text = _require_non_empty(raw, "content_text")
 
     media_urls = raw.get("media_urls")
     if isinstance(media_urls, list):
@@ -47,11 +55,11 @@ def normalize_latest_post(raw: dict[str, Any], *, backend: str) -> dict[str, Any
         normalized_media_urls = []
 
     payload = {
-        "source_page_url": str(raw.get("source_page_url") or "").strip(),
+        "source_page_url": source_page_url,
         "source_post_id": _extract_post_id(raw),
-        "source_post_url": str(raw.get("source_post_url") or "").strip(),
+        "source_post_url": source_post_url,
         "author": str(raw.get("author") or "").strip(),
-        "published_at": str(raw.get("published_at") or "").strip(),
+        "published_at": published_at,
         "content_text": content_text,
         "media_urls": normalized_media_urls,
         "backend": backend,

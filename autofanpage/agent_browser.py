@@ -5,6 +5,8 @@ import subprocess
 
 from autofanpage.errors import SourceFailedError
 
+_AGENT_BROWSER_TIMEOUT_SECONDS = 60
+
 
 def run_agent_browser_extract(
     *,
@@ -23,7 +25,16 @@ def run_agent_browser_extract(
     cmd.extend(["open", page_url, "--json"])
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=_AGENT_BROWSER_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise SourceFailedError(
+            f"agent_browser timed out after {_AGENT_BROWSER_TIMEOUT_SECONDS} seconds"
+        ) from exc
     except OSError as exc:
         raise SourceFailedError(f"agent_browser failed to launch: {exc}") from exc
     if proc.returncode != 0:

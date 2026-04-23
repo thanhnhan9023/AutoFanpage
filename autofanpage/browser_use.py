@@ -10,6 +10,7 @@ from autofanpage.errors import SourceFailedError
 
 
 _DEFAULT_CONFIG = "/home/thanhnhan9023/config/mcporter.json"
+_MCPORTER_TIMEOUT_SECONDS = 30
 
 
 def _run_mcporter(*, config: str, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -22,7 +23,16 @@ def _run_mcporter(*, config: str, tool_name: str, payload: dict[str, Any]) -> di
         json.dumps(payload, ensure_ascii=False),
     ]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=_MCPORTER_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise SourceFailedError(
+            f"{tool_name} timed out after {_MCPORTER_TIMEOUT_SECONDS} seconds"
+        ) from exc
     except OSError as exc:
         raise SourceFailedError(f"{tool_name} failed to launch: {exc}") from exc
     if proc.returncode != 0:
