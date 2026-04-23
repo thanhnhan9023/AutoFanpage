@@ -50,3 +50,30 @@ def build_first_comment_prompt(
         f"Output only the comment text. No preamble."
     )
     return _SYSTEM, [{"role": "user", "content": msg}]
+
+
+def build_hourly_repost_prompt(
+    *,
+    source_post: dict,
+    language: str,
+    style: str | None,
+) -> tuple[str, list[dict]]:
+    style_block = ""
+    if style == "ai5phut":
+        style_block = (
+            "Style: ai5phut\n"
+            "- Vietnamese wording should be short and direct.\n"
+            "- Start with a direct hook.\n"
+            "- Use short paragraphs.\n"
+            "- End with a direct CTA.\n\n"
+        )
+
+    msg = (
+        f"Rewrite this Facebook source post into one new post in {language}.\n\n"
+        f"{style_block}"
+        f"Source post URL: {source_post['source_post_url']}\n\n"
+        f"Source content:\n{source_post['content_text']}\n\n"
+        "Use only the source content. Do not invent numbers, names, or events. "
+        "Output only the final post body."
+    )
+    return _SYSTEM, [{"role": "user", "content": msg}]

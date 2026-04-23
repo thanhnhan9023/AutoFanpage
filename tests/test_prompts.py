@@ -1,4 +1,8 @@
-from autofanpage.prompts import build_writing_prompt, build_first_comment_prompt
+from autofanpage.prompts import (
+    build_first_comment_prompt,
+    build_hourly_repost_prompt,
+    build_writing_prompt,
+)
 from autofanpage.templates import TEMPLATES
 
 
@@ -57,3 +61,19 @@ def test_build_prompt_different_languages_produce_different_instructions():
         insight=APPROVED, template=TEMPLATES["news"], language="en",
     )
     assert m_vi[0]["content"] != m_en[0]["content"]
+
+
+def test_build_hourly_repost_prompt_includes_ai5phut_style_and_grounding():
+    source_post = {
+        "content_text": "OpenAI launched a new model.",
+        "source_post_url": "https://facebook.com/post/123",
+    }
+
+    system, messages = build_hourly_repost_prompt(
+        source_post=source_post,
+        language="vi",
+        style="ai5phut",
+    )
+
+    assert "ai5phut" in messages[0]["content"].lower()
+    assert "khong duoc" in system.lower() or "do not invent" in system.lower()
