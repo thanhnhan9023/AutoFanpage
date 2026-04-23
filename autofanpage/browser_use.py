@@ -20,6 +20,7 @@ def _run_mcporter(*, config: str, tool_name: str, payload: dict[str, Any]) -> di
         config,
         "call",
         tool_name,
+        "--args",
         json.dumps(payload, ensure_ascii=False),
     ]
     try:

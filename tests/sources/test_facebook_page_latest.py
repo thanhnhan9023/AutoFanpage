@@ -1,4 +1,5 @@
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 
@@ -151,6 +152,112 @@ def test_fetch_latest_post_from_page_uses_agent_browser_backend(monkeypatch):
     }
     assert result["backend"] == "agent_browser"
     assert result["source_post_id"] == "123"
+
+
+def test_run_browser_use_task_uses_mcporter_args_flag(monkeypatch):
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[4] == "browser-use.run_session":
+            return SimpleNamespace(
+                returncode=0,
+                stdout='{"session_id":"sess-1"}',
+                stderr="",
+            )
+        return SimpleNamespace(
+            returncode=0,
+            stdout='{"status":"idle","output":{"source_page_url":"https://www.facebook.com/0xSojalSec","source_post_url":"https://www.facebook.com/0xSojalSec/posts/123","published_at":"2026-04-23T09:15:00Z","content_text":"A useful post"}}',
+            stderr="",
+        )
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    monkeypatch.setattr("time.sleep", lambda _: None)
+
+    result = run_browser_use_task(
+        task="fetch latest post",
+        output_schema={"type": "object", "properties": {}, "additionalProperties": False},
+    )
+
+    assert result["content_text"] == "A useful post"
+    assert len(calls) == 2
+    assert calls[0][:6] == [
+        "mcporter",
+        "--config",
+        "/home/thanhnhan9023/config/mcporter.json",
+        "call",
+        "browser-use.run_session",
+        "--args",
+    ]
+    assert calls[1][:6] == [
+        "mcporter",
+        "--config",
+        "/home/thanhnhan9023/config/mcporter.json",
+        "call",
+        "browser-use.get_session",
+        "--args",
+    ]
+
+
+def test_run_agent_browser_extract_uses_open_wait_eval_flow(monkeypatch):
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if "eval" in cmd:
+            return SimpleNamespace(
+                returncode=0,
+                stdout='{"source_page_url":"https://www.facebook.com/0xSojalSec","source_post_url":"https://www.facebook.com/0xSojalSec/posts/123","published_at":"2026-04-23T09:15:00Z","content_text":"A useful post","author":"0xSojalSec","media_urls":[]}',
+                stderr="",
+            )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = run_agent_browser_extract(
+        page_url="https://www.facebook.com/0xSojalSec",
+        profile="facebook-profile",
+        session_name="session-1",
+        state_path="/tmp/state.json",
+    )
+
+    assert result["source_post_url"] == "https://www.facebook.com/0xSojalSec/posts/123"
+    assert len(calls) == 3
+    assert calls[0] == [
+        "agent-browser",
+        "--profile",
+        "facebook-profile",
+        "--session-name",
+        "session-1",
+        "--state",
+        "/tmp/state.json",
+        "open",
+        "https://www.facebook.com/0xSojalSec",
+    ]
+    assert calls[1] == [
+        "agent-browser",
+        "--profile",
+        "facebook-profile",
+        "--session-name",
+        "session-1",
+        "--state",
+        "/tmp/state.json",
+        "wait",
+        "--load",
+        "networkidle",
+    ]
+    assert calls[2][:8] == [
+        "agent-browser",
+        "--profile",
+        "facebook-profile",
+        "--session-name",
+        "session-1",
+        "--state",
+        "/tmp/state.json",
+        "eval",
+    ]
+    assert "--json" not in calls[0]
+    assert "--json" not in calls[1]
 
 
 def test_run_browser_use_task_maps_subprocess_timeout(monkeypatch):
