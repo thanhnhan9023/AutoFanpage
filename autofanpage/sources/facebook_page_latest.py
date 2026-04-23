@@ -86,7 +86,7 @@ def fetch_latest_post_from_page(source_cfg: dict[str, Any]) -> dict[str, Any]:
                 "media_urls": {"type": "array", "items": {"type": "string"}},
                 "fetched_at": {"type": "string"},
             },
-            "additionalProperties": True,
+            "additionalProperties": False,
         }
         raw = run_browser_use_task(
             task=(
