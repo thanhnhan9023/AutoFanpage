@@ -160,6 +160,31 @@ def test_validate_profile_rejects_unknown_facebook_page_latest_backend():
         validate("profile", invalid)
 
 
+def test_validate_profile_rejects_unknown_writing_style():
+    invalid = {
+        "name": "page_hourly_repost",
+        "page_id": "123",
+        "access_token_ref": "secret:fb_test",
+        "topic": "AI",
+        "language": "vi",
+        "post_times": ["08:00", "12:00", "16:00", "20:00"],
+        "timezone": "Asia/Ho_Chi_Minh",
+        "min_posts_required": 1,
+        "max_sources_per_platform": 12,
+        "sources": {
+            "youtube": {"enabled": False},
+            "perplexity": {"enabled": False},
+            "twitter_via_perplexity": {"enabled": False},
+            "reddit": {"enabled": False, "subreddits": [], "min_score": 0,
+                       "time_filter": "week", "top_per_sub": 0},
+            "hackernews": {"enabled": False, "min_points": 0},
+        },
+        "writing": {"style": "other"},
+    }
+    with pytest.raises(SchemaError):
+        validate("profile", invalid)
+
+
 def test_validate_profile_rejects_missing_page_id():
     invalid = {"name": "x", "post_times": ["08:00", "12:00", "16:00", "20:00"]}
     with pytest.raises(SchemaError) as exc:

@@ -40,6 +40,15 @@ PROFILE_SCHEMA: dict[str, Any] = {
                 "style": {"type": "string", "enum": ["ai5phut"]},
             },
         },
+        "publishing": {
+            "type": "object",
+            "properties": {
+                "backend": {
+                    "type": "string",
+                    "enum": ["facebook_graph", "mixpost_ui"],
+                },
+            },
+        },
         "sources": {
             "type": "object",
             "required": ["youtube", "perplexity", "twitter_via_perplexity",

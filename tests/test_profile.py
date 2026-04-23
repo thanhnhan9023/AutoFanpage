@@ -130,3 +130,35 @@ def test_profile_defaults_facebook_page_latest_backend_to_browser_use_mcp(fixtur
 def test_profile_exposes_optional_publishing_backend_for_preflight(fixtures_dir):
     p = load_profile(fixtures_dir / "profile_hourly_facebook_repost.json")
     assert p.publishing_backend == "facebook_graph"
+
+
+def test_profile_ignores_non_mapping_publishing_when_building_from_dict():
+    profile = Profile.from_dict(
+        {
+            "name": "page_hourly_repost",
+            "page_id": "123",
+            "access_token_ref": "secret:fb_test",
+            "topic": "AI",
+            "language": "vi",
+            "post_times": ["08:00", "12:00", "16:00", "20:00"],
+            "timezone": "Asia/Ho_Chi_Minh",
+            "min_posts_required": 1,
+            "max_sources_per_platform": 12,
+            "sources": {
+                "youtube": {"enabled": False},
+                "perplexity": {"enabled": False},
+                "twitter_via_perplexity": {"enabled": False},
+                "reddit": {
+                    "enabled": False,
+                    "subreddits": [],
+                    "min_score": 0,
+                    "time_filter": "week",
+                    "top_per_sub": 0,
+                },
+                "hackernews": {"enabled": False, "min_points": 0},
+            },
+            "publishing": "facebook_graph",
+        }
+    )
+
+    assert profile.publishing_backend is None

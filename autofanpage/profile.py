@@ -52,7 +52,8 @@ class Profile:
         if fb_latest:
             fb_latest.setdefault("backend", "browser_use_mcp")
             sources["facebook_page_latest"] = fb_latest
-        publishing = data.get("publishing", {})
+        publishing_data = data.get("publishing", {})
+        publishing = publishing_data if isinstance(publishing_data, dict) else {}
         return cls(
             name=data["name"],
             page_id=data["page_id"],
