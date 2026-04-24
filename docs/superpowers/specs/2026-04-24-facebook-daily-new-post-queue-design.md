@@ -192,6 +192,25 @@ Rules:
 4. History is append-only for now.
 5. `latest_reposted_source.json` stays as a convenience pointer for the most recent reposted item.
 
+### 5.4 Migration from existing state
+
+This feature replaces single-item dedupe with history-backed dedupe, so rollout must not forget what was already reposted before history existed.
+
+Required migration rule:
+
+1. if `reposted_source_posts.json` does not exist yet
+2. and `latest_reposted_source.json` exists
+3. bootstrap the history file with that latest pointer as its first item
+
+During the migration window, the implementation may also defensively check both:
+
+1. `reposted_source_posts.json`
+2. `latest_reposted_source.json`
+
+but the steady-state source of truth should become:
+
+- `reposted_source_posts.json`
+
 ---
 
 ## 6. Selection Logic
@@ -281,8 +300,14 @@ The source stage may not emit an arbitrary recent window and then treat backlog 
 
 Allowed conclusions:
 
-1. `backlog_exhausted` only when the search scope was sufficient to support that conclusion
+1. `backlog_exhausted` only when the source feed has been exhausted
 2. `partial_search_scope` when the run stopped at a hard safety cap before backlog exhaustion could be established
+
+This gives a concrete contract:
+
+1. finding one eligible candidate does not require full feed exhaustion
+2. claiming "no eligible post exists" does require full feed exhaustion
+3. hitting the hard safety cap always means `partial_search_scope`, never a clean skip
 
 ---
 
@@ -309,8 +334,11 @@ The orchestrator must distinguish between:
 1. `skip_no_posts_fetched`
 2. `skip_no_eligible_post_after_full_search`
 3. `error_partial_search_scope`
+4. `error_unresolved_candidate_timestamps`
 
 The third case is not a clean skip. It means the fetch stage stopped early, so the system cannot honestly claim backlog exhaustion.
+
+The fourth case is also not a clean skip. It means the source stage found unreposted candidates, but none of them had a usable `published_at_resolved`, so the selector could not classify or order them honestly.
 
 ---
 
@@ -370,6 +398,13 @@ If some posts cannot be resolved to a reliable absolute publish time:
 2. exclude unresolved posts from selection
 3. include enough detail in logs/artifacts to explain why a candidate was not selectable
 
+If fetched unreposted candidates exist but every remaining candidate has `published_at_resolved = null`:
+
+1. do not emit `skip_no_eligible_post_after_full_search`
+2. write an artifact explaining that candidate timestamps were unresolved
+3. telegram error status
+4. exit non-zero as `error_unresolved_candidate_timestamps`
+
 ---
 
 ## 11. Testing Strategy
@@ -388,6 +423,8 @@ Required test coverage:
    - zero eligible posts after full search
 9. partial-search scope does not report a false clean skip
 10. unresolved timestamps are not selected
+11. first run bootstraps repost history from `latest_reposted_source.json`
+12. unresolved-only candidates do not report a false clean skip
 
 The end-to-end smoke target remains:
 
