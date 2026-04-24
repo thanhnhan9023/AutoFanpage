@@ -1,6 +1,8 @@
 from autofanpage.prompts import (
     build_first_comment_prompt,
     build_hourly_repost_prompt,
+    build_hourly_repost_rewrite_prompt,
+    build_hourly_repost_review_prompt,
     build_writing_prompt,
 )
 from autofanpage.templates import TEMPLATES
@@ -80,3 +82,43 @@ def test_build_hourly_repost_prompt_includes_ai5phut_style_and_grounding():
     assert source_post["source_post_url"] in content
     assert source_post["content_text"] in content
     assert "khong duoc" in content.lower() or "do not invent" in content.lower()
+
+
+def test_build_hourly_repost_review_prompt_requests_json_feedback():
+    source_post = {
+        "content_text": "OpenAI launched a new model.",
+        "source_post_url": "https://facebook.com/post/123",
+    }
+
+    _, messages = build_hourly_repost_review_prompt(
+        source_post=source_post,
+        draft_post="Ban nhap bai viet",
+        language="vi",
+        style="ai5phut",
+    )
+
+    content = messages[0]["content"]
+    assert "json" in content.lower()
+    assert "approved" in content
+    assert "feedback" in content
+    assert "Ban nhap bai viet" in content
+
+
+def test_build_hourly_repost_rewrite_prompt_includes_feedback():
+    source_post = {
+        "content_text": "OpenAI launched a new model.",
+        "source_post_url": "https://facebook.com/post/123",
+    }
+
+    _, messages = build_hourly_repost_rewrite_prompt(
+        source_post=source_post,
+        current_draft="Ban nhap cu",
+        feedback="Can mo hook manh hon",
+        language="vi",
+        style="ai5phut",
+    )
+
+    content = messages[0]["content"]
+    assert "Ban nhap cu" in content
+    assert "Can mo hook manh hon" in content
+    assert source_post["content_text"] in content

@@ -120,6 +120,9 @@ def test_profile_keeps_empty_reddit_config_unset_while_defaulting_perplexity(
 def test_profile_loads_hourly_writing_style(fixtures_dir):
     p = load_profile(fixtures_dir / "profile_hourly_facebook_repost.json")
     assert p.writing.style == "ai5phut"
+    assert p.writing.review_model == "minimax/MiniMax-M2.7"
+    assert p.writing.review_api_key_ref == "secret:writer_gateway_key"
+    assert p.writing.review_max_rounds == 3
 
 
 def test_profile_defaults_facebook_page_latest_backend_to_browser_use_mcp(fixtures_dir):
@@ -130,6 +133,160 @@ def test_profile_defaults_facebook_page_latest_backend_to_browser_use_mcp(fixtur
 def test_profile_exposes_optional_publishing_backend_for_preflight(fixtures_dir):
     p = load_profile(fixtures_dir / "profile_hourly_facebook_repost.json")
     assert p.publishing_backend == "facebook_graph"
+
+
+def test_profile_loads_mixpost_publishing_settings(tmp_path, fixtures_dir):
+    import json
+
+    src = json.loads((fixtures_dir / "profile_plan3.json").read_text())
+    src["publishing"] = {
+        "backend": "mixpost_ui",
+        "mixpost": {
+            "base_url": "https://mixpost.example.test",
+            "storage_state_path": str(tmp_path / "state.json"),
+            "headless": False,
+        },
+    }
+    path = tmp_path / "mixpost.json"
+    path.write_text(json.dumps(src))
+
+    p = load_profile(path)
+
+    assert p.publishing_backend == "mixpost_ui"
+    assert p.publishing.mixpost.base_url == "https://mixpost.example.test"
+    assert p.publishing.mixpost.storage_state_path == str(tmp_path / "state.json")
+    assert p.publishing.mixpost.headless is False
+
+
+def test_profile_loads_mixpost_image_generation_settings(tmp_path, fixtures_dir):
+    import json
+
+    src = json.loads((fixtures_dir / "profile_plan3.json").read_text())
+    src["publishing"] = {
+        "backend": "mixpost_ui",
+        "mixpost": {
+            "base_url": "https://mixpost.example.test",
+            "storage_state_path": str(tmp_path / "state.json"),
+            "headless": True,
+        },
+        "images": {
+            "enabled": True,
+            "provider": "useapi_google_flow",
+            "fallback_provider": "local_playwright_card",
+            "useapi_base_url": "https://api.useapi.net",
+            "useapi_token_ref": "secret:useapi_token",
+            "google_flow_account_ref": "secret:useapi_google_flow_account",
+            "candidate_count": 4,
+            "overlay_mode": "none",
+            "require_image_for_publish": True,
+            "canvas": {
+                "width": 1080,
+                "height": 1350,
+                "theme": "ai5phut",
+            },
+        },
+    }
+    path = tmp_path / "mixpost-images.json"
+    path.write_text(json.dumps(src), encoding="utf-8")
+
+    p = load_profile(path)
+
+    assert p.publishing.images.enabled is True
+    assert p.publishing.images.provider == "useapi_google_flow"
+    assert p.publishing.images.fallback_provider == "local_playwright_card"
+    assert p.publishing.images.useapi_base_url == "https://api.useapi.net"
+    assert p.publishing.images.useapi_token_ref == "secret:useapi_token"
+    assert p.publishing.images.google_flow_account_ref == "secret:useapi_google_flow_account"
+    assert p.publishing.images.candidate_count == 4
+    assert p.publishing.images.overlay_mode == "none"
+    assert p.publishing.images.require_image_for_publish is True
+    assert p.publishing.images.canvas.width == 1080
+    assert p.publishing.images.canvas.height == 1350
+    assert p.publishing.images.canvas.theme == "ai5phut"
+
+
+def test_profile_loads_zai_fallback_image_generation_settings(tmp_path, fixtures_dir):
+    import json
+
+    src = json.loads((fixtures_dir / "profile_plan3.json").read_text())
+    src["publishing"] = {
+        "backend": "mixpost_ui",
+        "mixpost": {
+            "base_url": "https://mixpost.example.test",
+            "storage_state_path": str(tmp_path / "state.json"),
+            "headless": True,
+        },
+        "images": {
+            "enabled": True,
+            "provider": "useapi_google_flow",
+            "fallback_provider": "zai_glm_image",
+            "useapi_base_url": "https://api.useapi.net",
+            "useapi_token_ref": "secret:useapi_token",
+            "zai_api_key_ref": "secret:zai_api_key",
+            "zai_model": "glm-image",
+            "zai_quality": "standard",
+            "candidate_count": 4,
+            "overlay_mode": "none",
+            "require_image_for_publish": True,
+            "canvas": {
+                "width": 1080,
+                "height": 1350,
+                "theme": "ai5phut",
+            },
+        },
+    }
+    path = tmp_path / "mixpost-images-zai.json"
+    path.write_text(json.dumps(src), encoding="utf-8")
+
+    p = load_profile(path)
+
+    assert p.publishing.images.fallback_provider == "zai_glm_image"
+    assert p.publishing.images.zai_api_key_ref == "secret:zai_api_key"
+    assert p.publishing.images.zai_model == "glm-image"
+    assert p.publishing.images.zai_quality == "standard"
+
+
+def test_profile_loads_codex_imagen_fallback_settings(tmp_path, fixtures_dir):
+    import json
+
+    src = json.loads((fixtures_dir / "profile_plan3.json").read_text())
+    src["publishing"] = {
+        "backend": "mixpost_ui",
+        "mixpost": {
+            "base_url": "https://mixpost.example.test",
+            "storage_state_path": str(tmp_path / "state.json"),
+            "headless": True,
+        },
+        "images": {
+            "enabled": True,
+            "provider": "useapi_google_flow",
+            "fallback_provider": "codex_imagen_oauth",
+            "useapi_base_url": "https://api.useapi.net",
+            "useapi_token_ref": "secret:useapi_token",
+            "codex_imagen_script_path": "/tmp/codex-imagen/scripts/codex-imagen.mjs",
+            "codex_auth_json_path": "~/.codex/auth.json",
+            "codex_timeout_seconds": 300,
+            "codex_model": "gpt-5.4",
+            "candidate_count": 4,
+            "overlay_mode": "none",
+            "require_image_for_publish": True,
+            "canvas": {
+                "width": 1080,
+                "height": 1350,
+                "theme": "ai5phut",
+            },
+        },
+    }
+    path = tmp_path / "mixpost-images-codex-imagen.json"
+    path.write_text(json.dumps(src), encoding="utf-8")
+
+    p = load_profile(path)
+
+    assert p.publishing.images.fallback_provider == "codex_imagen_oauth"
+    assert p.publishing.images.codex_imagen_script_path == "/tmp/codex-imagen/scripts/codex-imagen.mjs"
+    assert p.publishing.images.codex_auth_json_path == "~/.codex/auth.json"
+    assert p.publishing.images.codex_timeout_seconds == 300
+    assert p.publishing.images.codex_model == "gpt-5.4"
 
 
 def test_profile_ignores_non_mapping_publishing_when_building_from_dict():
@@ -162,3 +319,4 @@ def test_profile_ignores_non_mapping_publishing_when_building_from_dict():
     )
 
     assert profile.publishing_backend is None
+    assert profile.publishing.backend is None

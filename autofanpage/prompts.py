@@ -77,3 +77,68 @@ def build_hourly_repost_prompt(
         "Output only the final post body."
     )
     return _SYSTEM, [{"role": "user", "content": msg}]
+
+
+def build_hourly_repost_review_prompt(
+    *,
+    source_post: dict,
+    draft_post: str,
+    language: str,
+    style: str | None,
+) -> tuple[str, list[dict]]:
+    style_block = ""
+    if style == "ai5phut":
+        style_block = (
+            "Review criteria for ai5phut:\n"
+            "- Hook must be direct.\n"
+            "- Paragraphs should stay short.\n"
+            "- Wording should stay concise and practical.\n"
+            "- Ending should contain a direct CTA.\n\n"
+        )
+
+    msg = (
+        f"Review this rewritten Facebook post in {language}.\n\n"
+        f"{style_block}"
+        f"Source post URL: {source_post['source_post_url']}\n\n"
+        f"Source content:\n{source_post['content_text']}\n\n"
+        f"Draft post:\n{draft_post}\n\n"
+        "Check only these things:\n"
+        "1. Does it stay grounded in the source content?\n"
+        "2. Is the hook strong and direct?\n"
+        "3. Is the writing concise and readable?\n"
+        "4. Does it fit the requested style?\n\n"
+        "Return strict JSON only with this shape:\n"
+        '{"approved": true|false, "feedback": "short actionable feedback in Vietnamese"}'
+    )
+    return _SYSTEM, [{"role": "user", "content": msg}]
+
+
+def build_hourly_repost_rewrite_prompt(
+    *,
+    source_post: dict,
+    current_draft: str,
+    feedback: str,
+    language: str,
+    style: str | None,
+) -> tuple[str, list[dict]]:
+    style_block = ""
+    if style == "ai5phut":
+        style_block = (
+            "Style: ai5phut\n"
+            "- Vietnamese wording should be short and direct.\n"
+            "- Start with a direct hook.\n"
+            "- Use short paragraphs.\n"
+            "- End with a direct CTA.\n\n"
+        )
+
+    msg = (
+        f"Rewrite this Facebook post in {language} using the review feedback.\n\n"
+        f"{style_block}"
+        f"Source post URL: {source_post['source_post_url']}\n\n"
+        f"Source content:\n{source_post['content_text']}\n\n"
+        f"Current draft:\n{current_draft}\n\n"
+        f"Review feedback:\n{feedback}\n\n"
+        "Keep the post grounded in the source. Do not invent numbers, names, or events. "
+        "Output only the final rewritten post body."
+    )
+    return _SYSTEM, [{"role": "user", "content": msg}]

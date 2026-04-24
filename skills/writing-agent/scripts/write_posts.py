@@ -16,7 +16,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from autofanpage.errors import AutofanpageError
-from autofanpage.llm import ClaudeClient
+from autofanpage.llm import ClaudeClient, build_writer_client
 from autofanpage.profile import load_profile
 from autofanpage.prompts import build_first_comment_prompt, build_writing_prompt
 from autofanpage.schemas import validate
@@ -47,10 +47,7 @@ def main(argv: list[str] | None = None) -> int:
 
     profile = load_profile(args.profile)
     api_key = get_secret(profile.writing.api_key_ref)
-    client = ClaudeClient(
-        api_key=api_key,
-        model=profile.writing.model,
-    )
+    client = build_writer_client(api_key=api_key, model=profile.writing.model)
 
     posts = []
     for slot_index, ptype in enumerate(POST_TYPE_BY_SLOT):

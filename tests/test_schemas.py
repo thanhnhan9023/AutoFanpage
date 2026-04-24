@@ -185,6 +185,198 @@ def test_validate_profile_rejects_unknown_writing_style():
         validate("profile", invalid)
 
 
+def test_validate_profile_accepts_hourly_review_writer_fields():
+    valid = {
+        "name": "page_hourly_repost",
+        "page_id": "123",
+        "access_token_ref": "secret:fb_test",
+        "topic": "AI",
+        "language": "vi",
+        "post_times": ["08:00", "12:00", "16:00", "20:00"],
+        "timezone": "Asia/Ho_Chi_Minh",
+        "min_posts_required": 1,
+        "max_sources_per_platform": 12,
+        "sources": {
+            "youtube": {"enabled": False},
+            "perplexity": {"enabled": False},
+            "twitter_via_perplexity": {"enabled": False},
+            "reddit": {"enabled": False, "subreddits": [], "min_score": 0,
+                       "time_filter": "week", "top_per_sub": 0},
+            "hackernews": {"enabled": False, "min_points": 0},
+            "facebook_page_latest": {
+                "enabled": True,
+                "page_url": "https://www.facebook.com/0xSojalSec"
+            },
+        },
+        "writing": {
+            "style": "ai5phut",
+            "review_model": "minimax/MiniMax-M2.7",
+            "review_api_key_ref": "secret:writer_gateway_key",
+            "review_max_rounds": 3,
+        },
+    }
+    validate("profile", valid)
+
+
+def test_validate_profile_accepts_useapi_image_block():
+    valid = {
+        "name": "page_hourly_repost",
+        "page_id": "123",
+        "access_token_ref": "secret:fb_test",
+        "topic": "AI",
+        "language": "vi",
+        "post_times": ["08:00", "12:00", "16:00", "20:00"],
+        "timezone": "Asia/Ho_Chi_Minh",
+        "min_posts_required": 1,
+        "max_sources_per_platform": 12,
+        "sources": {
+            "youtube": {"enabled": False},
+            "perplexity": {"enabled": False},
+            "twitter_via_perplexity": {"enabled": False},
+            "reddit": {"enabled": False, "subreddits": [], "min_score": 0,
+                       "time_filter": "week", "top_per_sub": 0},
+            "hackernews": {"enabled": False, "min_points": 0},
+            "facebook_page_latest": {
+                "enabled": True,
+                "page_url": "https://www.facebook.com/0xSojalSec"
+            },
+        },
+        "publishing": {
+            "backend": "mixpost_ui",
+            "mixpost": {
+                "base_url": "https://mixpost.example.test",
+                "storage_state_path": "/tmp/state.json",
+                "headless": True,
+            },
+            "images": {
+                "enabled": True,
+                "provider": "useapi_google_flow",
+                "fallback_provider": "local_playwright_card",
+                "useapi_base_url": "https://api.useapi.net",
+                "useapi_token_ref": "secret:useapi_token",
+                "google_flow_account_ref": "secret:useapi_google_flow_account",
+                "capsolver_api_key_ref": "secret:capsolver_api_key",
+                "require_image_for_publish": True,
+                "overlay_mode": "none",
+                "candidate_count": 4,
+                "canvas": {
+                    "width": 1080,
+                    "height": 1350,
+                    "theme": "ai5phut",
+                },
+            },
+        },
+    }
+    validate("profile", valid)
+
+
+def test_validate_profile_accepts_zai_image_fallback_settings():
+    valid = {
+        "name": "page_hourly_repost",
+        "page_id": "123",
+        "access_token_ref": "secret:fb_test",
+        "topic": "AI",
+        "language": "vi",
+        "post_times": ["08:00", "12:00", "16:00", "20:00"],
+        "timezone": "Asia/Ho_Chi_Minh",
+        "min_posts_required": 1,
+        "max_sources_per_platform": 12,
+        "sources": {
+            "youtube": {"enabled": False},
+            "perplexity": {"enabled": False},
+            "twitter_via_perplexity": {"enabled": False},
+            "reddit": {"enabled": False, "subreddits": [], "min_score": 0,
+                       "time_filter": "week", "top_per_sub": 0},
+            "hackernews": {"enabled": False, "min_points": 0},
+            "facebook_page_latest": {
+                "enabled": True,
+                "page_url": "https://www.facebook.com/0xSojalSec"
+            },
+        },
+        "publishing": {
+            "backend": "mixpost_ui",
+            "mixpost": {
+                "base_url": "https://mixpost.example.test",
+                "storage_state_path": "/tmp/state.json",
+                "headless": True,
+            },
+            "images": {
+                "enabled": True,
+                "provider": "useapi_google_flow",
+                "fallback_provider": "zai_glm_image",
+                "useapi_base_url": "https://api.useapi.net",
+                "useapi_token_ref": "secret:useapi_token",
+                "zai_api_key_ref": "secret:zai_api_key",
+                "zai_model": "glm-image",
+                "zai_quality": "standard",
+                "require_image_for_publish": True,
+                "overlay_mode": "none",
+                "candidate_count": 4,
+                "canvas": {
+                    "width": 1080,
+                    "height": 1350,
+                    "theme": "ai5phut",
+                },
+            },
+        },
+    }
+    validate("profile", valid)
+
+
+def test_validate_profile_accepts_codex_imagen_fallback_settings():
+    valid = {
+        "name": "page_hourly_repost",
+        "page_id": "123",
+        "access_token_ref": "secret:fb_test",
+        "topic": "AI",
+        "language": "vi",
+        "post_times": ["08:00", "12:00", "16:00", "20:00"],
+        "timezone": "Asia/Ho_Chi_Minh",
+        "min_posts_required": 1,
+        "max_sources_per_platform": 12,
+        "sources": {
+            "youtube": {"enabled": False},
+            "perplexity": {"enabled": False},
+            "twitter_via_perplexity": {"enabled": False},
+            "reddit": {"enabled": False, "subreddits": [], "min_score": 0,
+                       "time_filter": "week", "top_per_sub": 0},
+            "hackernews": {"enabled": False, "min_points": 0},
+            "facebook_page_latest": {
+                "enabled": True,
+                "page_url": "https://www.facebook.com/0xSojalSec"
+            },
+        },
+        "publishing": {
+            "backend": "mixpost_ui",
+            "mixpost": {
+                "base_url": "https://mixpost.example.test",
+                "storage_state_path": "/tmp/state.json",
+                "headless": True,
+            },
+            "images": {
+                "enabled": True,
+                "provider": "useapi_google_flow",
+                "fallback_provider": "codex_imagen_oauth",
+                "useapi_base_url": "https://api.useapi.net",
+                "useapi_token_ref": "secret:useapi_token",
+                "codex_imagen_script_path": "/tmp/codex-imagen/scripts/codex-imagen.mjs",
+                "codex_auth_json_path": "~/.codex/auth.json",
+                "codex_timeout_seconds": 300,
+                "codex_model": "gpt-5.4",
+                "require_image_for_publish": True,
+                "overlay_mode": "none",
+                "candidate_count": 4,
+                "canvas": {
+                    "width": 1080,
+                    "height": 1350,
+                    "theme": "ai5phut",
+                },
+            },
+        },
+    }
+    validate("profile", valid)
+
+
 def test_validate_profile_rejects_missing_page_id():
     invalid = {"name": "x", "post_times": ["08:00", "12:00", "16:00", "20:00"]}
     with pytest.raises(SchemaError) as exc:
@@ -406,6 +598,78 @@ def test_publish_results_allows_null_ids_for_failed_slots():
         "posts": [
             {"time": "08:00", "type": "news", "post_id": None,
              "comment_id": None, "status": 400},
+        ],
+    })
+
+
+def test_validate_post_assets_accepts_valid_payload():
+    validate("post_assets", {
+        "page": "page_test",
+        "provider": "mixed",
+        "date": "2026-04-20",
+        "assets": [
+            {
+                "time": "08:00",
+                "type": "news",
+                "status": "ok",
+                "provider": "local_playwright_card",
+                "image_prompt": "A clean editorial image about AI automation",
+                "job_id": None,
+                "raw_image_url": None,
+                "raw_image_path": None,
+                "final_image_path": "assets/08-00-selected.png",
+                "selected_candidate_index": None,
+                "candidates": [],
+                "error": "fallback from primary provider",
+            },
+        ],
+    })
+
+
+def test_validate_post_assets_accepts_zai_provider():
+    validate("post_assets", {
+        "page": "page_test",
+        "provider": "zai_glm_image",
+        "date": "2026-04-20",
+        "assets": [
+            {
+                "time": "08:00",
+                "type": "news",
+                "status": "ok",
+                "provider": "zai_glm_image",
+                "image_prompt": "A clean editorial image about AI automation",
+                "job_id": None,
+                "raw_image_url": "https://cdn.z.ai/out.png",
+                "raw_image_path": "assets/08-00-raw-zai.png",
+                "final_image_path": "assets/08-00-selected.png",
+                "selected_candidate_index": None,
+                "candidates": [],
+                "error": "fallback from primary provider",
+            },
+        ],
+    })
+
+
+def test_validate_post_assets_accepts_codex_imagen_provider():
+    validate("post_assets", {
+        "page": "page_test",
+        "provider": "codex_imagen_oauth",
+        "date": "2026-04-20",
+        "assets": [
+            {
+                "time": "08:00",
+                "type": "news",
+                "status": "ok",
+                "provider": "codex_imagen_oauth",
+                "image_prompt": "A clean editorial image about AI automation",
+                "job_id": None,
+                "raw_image_url": None,
+                "raw_image_path": "assets/08-00-raw-codex.png",
+                "final_image_path": "assets/08-00-selected.png",
+                "selected_candidate_index": None,
+                "candidates": [],
+                "error": "fallback from primary provider",
+            },
         ],
     })
 

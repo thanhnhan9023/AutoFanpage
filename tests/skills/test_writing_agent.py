@@ -38,7 +38,7 @@ class _FakeClaude:
 
 def test_happy_path_writes_four_posts_matching_slot_types(run_dir, fixtures_dir, mocker):
     fake = _FakeClaude()
-    mocker.patch.object(write_posts, "ClaudeClient", return_value=fake)
+    mocker.patch.object(write_posts, "build_writer_client", return_value=fake)
     mocker.patch.object(write_posts, "get_secret", return_value="sk-ant-fake")
 
     rc = write_posts.main([
@@ -63,7 +63,7 @@ def test_slot_without_matching_insight_emits_null(run_dir, fixtures_dir, mocker)
     (run_dir / "reviewed_insights.json").write_text(json.dumps(src))
 
     fake = _FakeClaude()
-    mocker.patch.object(write_posts, "ClaudeClient", return_value=fake)
+    mocker.patch.object(write_posts, "build_writer_client", return_value=fake)
     mocker.patch.object(write_posts, "get_secret", return_value="sk")
 
     write_posts.main([
@@ -91,7 +91,7 @@ def test_multiple_approved_of_same_type_picks_highest_total(run_dir, fixtures_di
     (run_dir / "reviewed_insights.json").write_text(json.dumps(src))
 
     fake = _FakeClaude()
-    mocker.patch.object(write_posts, "ClaudeClient", return_value=fake)
+    mocker.patch.object(write_posts, "build_writer_client", return_value=fake)
     mocker.patch.object(write_posts, "get_secret", return_value="sk")
 
     write_posts.main([
@@ -112,7 +112,7 @@ def test_empty_approved_produces_four_null_posts(tmp_path, fixtures_dir, mocker)
     }))
 
     fake = _FakeClaude()
-    mocker.patch.object(write_posts, "ClaudeClient", return_value=fake)
+    mocker.patch.object(write_posts, "build_writer_client", return_value=fake)
     mocker.patch.object(write_posts, "get_secret", return_value="sk")
 
     rc = write_posts.main([

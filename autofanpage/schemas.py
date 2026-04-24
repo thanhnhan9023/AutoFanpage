@@ -38,6 +38,9 @@ PROFILE_SCHEMA: dict[str, Any] = {
                 "temperature": {"type": "number"},
                 "api_key_ref": {"type": "string", "pattern": r"^secret:"},
                 "style": {"type": "string", "enum": ["ai5phut"]},
+                "review_model": {"type": "string"},
+                "review_api_key_ref": {"type": "string", "pattern": r"^secret:"},
+                "review_max_rounds": {"type": "integer", "minimum": 1, "maximum": 5},
             },
         },
         "publishing": {
@@ -47,7 +50,71 @@ PROFILE_SCHEMA: dict[str, Any] = {
                     "type": "string",
                     "enum": ["facebook_graph", "mixpost_ui"],
                 },
+                "mixpost": {
+                    "type": "object",
+                    "properties": {
+                        "base_url": {"type": "string", "minLength": 1},
+                        "storage_state_path": {"type": "string", "minLength": 1},
+                        "headless": {"type": "boolean"},
+                    },
+                    "required": ["base_url", "storage_state_path"],
+                },
+                "images": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {"type": "boolean"},
+                        "provider": {
+                            "type": "string",
+                            "enum": ["useapi_google_flow"],
+                        },
+                        "fallback_provider": {
+                            "type": "string",
+                            "enum": ["local_playwright_card", "zai_glm_image", "codex_imagen_oauth"],
+                        },
+                        "useapi_base_url": {"type": "string", "minLength": 1},
+                        "useapi_token_ref": {"type": "string", "pattern": r"^secret:"},
+                        "google_flow_account_ref": {"type": "string", "pattern": r"^secret:"},
+                        "capsolver_api_key_ref": {"type": "string", "pattern": r"^secret:"},
+                        "codex_imagen_script_path": {"type": "string", "minLength": 1},
+                        "codex_auth_json_path": {"type": "string", "minLength": 1},
+                        "codex_timeout_seconds": {"type": "integer", "minimum": 1},
+                        "codex_model": {"type": "string", "minLength": 1},
+                        "zai_base_url": {"type": "string", "minLength": 1},
+                        "zai_api_key_ref": {"type": "string", "pattern": r"^secret:"},
+                        "zai_model": {"type": "string", "minLength": 1},
+                        "zai_quality": {"type": "string", "enum": ["standard", "hd"]},
+                        "require_image_for_publish": {"type": "boolean"},
+                        "overlay_mode": {"type": "string", "enum": ["none"]},
+                        "candidate_count": {"type": "integer", "minimum": 1, "maximum": 8},
+                        "canvas": {
+                            "type": "object",
+                            "properties": {
+                                "width": {"type": "integer", "minimum": 1},
+                                "height": {"type": "integer", "minimum": 1},
+                                "theme": {"type": "string", "minLength": 1},
+                            },
+                            "required": ["width", "height", "theme"],
+                        },
+                    },
+                    "required": [
+                        "enabled",
+                        "provider",
+                        "useapi_base_url",
+                        "useapi_token_ref",
+                        "candidate_count",
+                        "canvas",
+                    ],
+                },
             },
+            "allOf": [
+                {
+                    "if": {
+                        "properties": {"backend": {"const": "mixpost_ui"}},
+                        "required": ["backend"],
+                    },
+                    "then": {"required": ["mixpost"]},
+                }
+            ],
         },
         "sources": {
             "type": "object",
@@ -459,6 +526,76 @@ PUBLISH_RESULTS_SCHEMA: dict = {
 }
 
 
+_RELATIVE_PATH_SCHEMA = {
+    "type": ["string", "null"],
+    "pattern": r"^(?!/)(?!.*\.\.)[^\\]*$",
+}
+
+_IMAGE_CANDIDATE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": ["index", "job_id", "raw_image_url", "raw_image_path"],
+    "properties": {
+        "index": {"type": "integer", "minimum": 1},
+        "job_id": {"type": "string", "minLength": 1},
+        "raw_image_url": {"type": "string", "minLength": 1},
+        "raw_image_path": _RELATIVE_PATH_SCHEMA,
+    },
+}
+
+POST_ASSETS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": ["page", "provider", "date", "assets"],
+    "properties": {
+        "page": {"type": "string", "minLength": 1},
+        "provider": {
+            "type": "string",
+            "enum": ["useapi_google_flow", "codex_imagen_oauth", "zai_glm_image", "local_playwright_card", "mixed"],
+        },
+        "date": {"type": "string", "pattern": r"^\d{4}-\d{2}-\d{2}$"},
+        "assets": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "time",
+                    "type",
+                    "status",
+                    "provider",
+                    "image_prompt",
+                    "job_id",
+                    "raw_image_url",
+                    "raw_image_path",
+                    "final_image_path",
+                    "selected_candidate_index",
+                    "candidates",
+                    "error",
+                ],
+                "properties": {
+                    "time": {
+                        "type": "string",
+                        "pattern": r"^[0-2][0-9]:[0-5][0-9]$",
+                    },
+                    "type": {"type": "string", "enum": _POST_TYPES},
+                    "status": {"type": "string", "enum": ["ok", "failed"]},
+                    "provider": {
+                        "type": "string",
+                        "enum": ["useapi_google_flow", "codex_imagen_oauth", "zai_glm_image", "local_playwright_card"],
+                    },
+                    "image_prompt": {"type": "string", "minLength": 1},
+                    "job_id": {"type": ["string", "null"]},
+                    "raw_image_url": {"type": ["string", "null"]},
+                    "raw_image_path": _RELATIVE_PATH_SCHEMA,
+                    "final_image_path": _RELATIVE_PATH_SCHEMA,
+                    "selected_candidate_index": {"type": ["integer", "null"], "minimum": 1},
+                    "candidates": {"type": "array", "items": _IMAGE_CANDIDATE_SCHEMA},
+                    "error": {"type": ["string", "null"]},
+                },
+            },
+        },
+    },
+}
+
+
 _SCHEMAS = {
     "profile": PROFILE_SCHEMA,
     "hackernews_results": HACKERNEWS_RESULTS_SCHEMA,
@@ -474,6 +611,7 @@ _SCHEMAS = {
     "reviewed_insights":  REVIEWED_INSIGHTS_SCHEMA,
     "posts":              POSTS_SCHEMA,
     "publish_results":    PUBLISH_RESULTS_SCHEMA,
+    "post_assets":        POST_ASSETS_SCHEMA,
 }
 
 
