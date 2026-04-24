@@ -52,9 +52,16 @@ def main(argv: list[str] | None = None) -> int:
     if not body:
         raise AutofanpageError("generated repost body is empty")
 
-    placeholder_times = [t for t in profile.post_times if t != args.publish_time]
-    if len(placeholder_times) == len(profile.post_times):
-        placeholder_times = profile.post_times[1:]
+    placeholder_times = list(profile.post_times)
+    try:
+        placeholder_times.remove(args.publish_time)
+    except ValueError:
+        placeholder_times = placeholder_times[1:]
+    if len(placeholder_times) != 3:
+        raise AutofanpageError(
+            f"expected exactly 3 placeholder times after excluding publish time; "
+            f"got {len(placeholder_times)}"
+        )
 
     posts = {
         "language": profile.language,

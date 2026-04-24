@@ -177,3 +177,67 @@ def test_main_rejects_empty_generated_body(tmp_path, fixtures_dir, mocker, capsy
 
     assert not (run_dir / "posts.json").exists()
     assert capsys.readouterr().out == ""
+
+
+def test_main_handles_duplicate_profile_times_by_removing_one_matching_occurrence(
+    tmp_path, fixtures_dir, mocker, capsys
+):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "latest_source_post.json").write_text(
+        json.dumps(
+            {
+                "source_page_url": "https://www.facebook.com/0xSojalSec",
+                "source_post_id": "123",
+                "source_post_url": "https://facebook.com/post/123",
+                "author": "0xSojalSec",
+                "published_at": "2026-04-23T09:15:00Z",
+                "content_text": "OpenAI launched a new model.",
+                "media_urls": [],
+                "backend": "browser_use_mcp",
+                "fetched_at": "2026-04-23T10:00:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    profile_data = json.loads(
+        (fixtures_dir / "profile_hourly_facebook_repost.json").read_text(encoding="utf-8")
+    )
+    profile_data["post_times"] = ["08:00", "12:00", "12:00", "20:00"]
+    profile_path = tmp_path / "profile_duplicate_times.json"
+    profile_path.write_text(
+        json.dumps(profile_data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    mocker.patch.object(write_repost, "get_secret", return_value="sk-ant-fake")
+    mocker.patch.object(write_repost.ClaudeClient, "generate", return_value="Bai viet moi")
+
+    rc = write_repost.main(
+        [
+            "--run-dir",
+            str(run_dir),
+            "--profile",
+            str(profile_path),
+            "--date",
+            "2026-04-23",
+            "--publish-time",
+            "12:00",
+        ]
+    )
+
+    assert rc == 0
+    out = json.loads((run_dir / "posts.json").read_text(encoding="utf-8"))
+    assert len(out["posts"]) == 4
+    assert [post["time"] for post in out["posts"]] == ["12:00", "08:00", "12:00", "20:00"]
+    assert [post["type"] for post in out["posts"]] == ["news", "guide", "opinion", "case_study"]
+
+    for post in out["posts"][1:]:
+        assert post["content"] is None
+        assert post["first_comment"] is None
+
+    stdout = capsys.readouterr().out.strip()
+    status = json.loads(stdout)
+    assert status["artifact"] == "posts.json"
+    assert status["posts_generated"] == 1
