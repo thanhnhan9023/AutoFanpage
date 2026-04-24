@@ -105,7 +105,9 @@ def test_success_template_includes_hourly_source_context():
             "fetch_backend": "browser_use_mcp",
         },
     )
+    assert "https://www.facebook.com/0xSojalSec" in msg
     assert "https://www.facebook.com/0xSojalSec/posts/123" in msg
+    assert "2026-04-23T09:15:00Z" in msg
     assert "browser_use_mcp" in msg
 
 
