@@ -30,6 +30,14 @@ def format_message(*, status: str, page: str, details: dict[str, Any]) -> str:
         failed = details.get("phase1_failed_sources") or []
         if failed:
             lines.append(f"⚠️ failed: {', '.join(failed)}")
+        if details.get("source_page_url"):
+            lines.append(f"📄 source page: {details['source_page_url']}")
+        if details.get("source_post_url"):
+            lines.append(f"🔗 source post: {details['source_post_url']}")
+        if details.get("source_published_at"):
+            lines.append(f"🕒 source published: {details['source_published_at']}")
+        if details.get("fetch_backend"):
+            lines.append(f"🧰 fetch backend: {details['fetch_backend']}")
     elif status == "error":
         lines = [
             header,

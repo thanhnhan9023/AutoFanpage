@@ -91,6 +91,24 @@ def test_success_template_renders_posts_generated_value():
     assert "4 posts generated" in msg
 
 
+def test_success_template_includes_hourly_source_context():
+    msg = format_message(
+        status="success",
+        page="page_hourly_repost",
+        details={
+            "posts_scheduled": 1,
+            "date": "2026-04-23",
+            "elapsed_sec": 12,
+            "source_page_url": "https://www.facebook.com/0xSojalSec",
+            "source_post_url": "https://www.facebook.com/0xSojalSec/posts/123",
+            "source_published_at": "2026-04-23T09:15:00Z",
+            "fetch_backend": "browser_use_mcp",
+        },
+    )
+    assert "https://www.facebook.com/0xSojalSec/posts/123" in msg
+    assert "browser_use_mcp" in msg
+
+
 def test_info_template_renders_dry_run_preview():
     msg = format_message(
         status="info", page="p",
