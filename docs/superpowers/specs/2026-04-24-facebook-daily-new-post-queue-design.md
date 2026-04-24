@@ -147,12 +147,13 @@ Rules:
    - `null` when the fetch layer cannot resolve an absolute publish time
 3. `search_status` is required and must be one of:
    - `full_search_complete`
+   - `selection_ready`
    - `partial_search_scope`
    - `fetch_error`
 4. `end_of_feed_reached` is required and indicates whether the backend positively reached feed exhaustion.
 5. `scan_stopped_reason` is required and records why scanning ended, for example:
    - `end_of_feed`
-   - `eligible_candidate_found`
+   - `selection_ready`
    - `max_posts_scanned`
    - `login_wall`
    - `rate_limited`
@@ -165,9 +166,11 @@ Rules:
 Interpretation contract:
 
 1. `search_status = full_search_complete` means the backend can honestly claim there are no newer unseen source posts beyond what the artifact captured.
-2. `search_status = partial_search_scope` means the backend stopped before it could prove backlog exhaustion. This is never a clean skip condition even if `posts` is empty.
-3. `search_status = fetch_error` means the backend could not complete the fetch honestly. This is also never a clean skip condition even if `posts` is empty.
-4. `end_of_feed_reached = true` should only appear with `search_status = full_search_complete`.
+2. `search_status = selection_ready` means the backend captured enough newest-first feed scope for this run to select one post honestly, but it did not exhaust the older backlog.
+   This status requires `posts` to be non-empty.
+3. `search_status = partial_search_scope` means the backend stopped before it could prove backlog exhaustion or before it could guarantee selection coverage for this run. This is never a clean skip condition even if `posts` is empty.
+4. `search_status = fetch_error` means the backend could not complete the fetch honestly. This is also never a clean skip condition even if `posts` is empty.
+5. `end_of_feed_reached = true` should only appear with `search_status = full_search_complete`.
 
 ### 5.2 Keep `latest_source_post.json`
 
@@ -214,8 +217,12 @@ Rules:
 1. Deduplication key prefers `source_post_id`.
 2. If `source_post_id` is absent, fall back to `source_post_url`.
 3. History stores both raw `published_at` and machine-usable `published_at_resolved`.
-4. History is append-only for now.
-5. `latest_reposted_source.json` stays as a convenience pointer for the most recent reposted item.
+4. Dedupe membership must compare across all available stable identifiers, not only one preferred key. A fetched post is already reposted if either:
+   - its non-empty `source_post_id` matches any history item `source_post_id`, or
+   - its non-empty `source_post_url` matches any history item `source_post_url`
+5. If a history item was originally stored with only `source_post_url` and the same post is later seen again with both URL and `source_post_id`, the implementation may enrich the existing matched history item with the missing identifier instead of treating it as a different post.
+6. History is logically append-only for repost events, except for identifier enrichment on an already-matched item.
+7. `latest_reposted_source.json` stays as a convenience pointer for the most recent reposted item.
 
 ### 5.4 Migration from existing state
 
@@ -252,6 +259,7 @@ This limitation is acceptable for this phase because the historical repost set d
 Given `source_posts.json` and repost history:
 
 1. Remove any source post already present in repost history.
+   Matching must use the cross-key dedupe rule from section `5.3`, not only a single preferred key.
 2. Use `published_at_resolved` as the authoritative selector timestamp.
 3. Convert `published_at_resolved` into `profile.timezone`.
 4. Partition remaining posts into:
@@ -327,7 +335,7 @@ Recommended behavior:
 3. normalize each candidate post URL
 4. open candidate detail pages as needed to extract full text and metadata
 5. continue paging until one of these stop conditions is met:
-   - at least one eligible candidate has been found, and every visible newer post has already been classified
+   - at least one candidate post has been captured, and every visible newer post has already been captured or classified so the selector can choose one post honestly for this run
    - the backend has positively detected end-of-feed
    - the backend reaches an explicit hard safety cap such as `max_posts_scanned`
 
@@ -351,7 +359,8 @@ The source stage may not emit an arbitrary recent window and then treat backlog 
 Allowed conclusions:
 
 1. `backlog_exhausted` only when the source feed has been exhausted
-2. `partial_search_scope` when the run stopped at a hard safety cap before backlog exhaustion could be established
+2. `selection_ready` when the backend has captured enough newest-first scope to select one post honestly for this run, but has not exhausted the older backlog
+3. `partial_search_scope` when the run stopped at a hard safety cap before backlog exhaustion or honest selection coverage could be established
 
 This gives a concrete contract:
 
@@ -360,6 +369,7 @@ This gives a concrete contract:
 3. hitting the hard safety cap always means `partial_search_scope`, never a clean skip
 4. an empty `posts` list is only a clean skip input when `search_status = full_search_complete`
 5. an empty `posts` list with `search_status = partial_search_scope` or `fetch_error` is an error outcome, not "nothing to repost"
+6. `search_status = selection_ready` is valid for a successful publish path, but not for a clean skip after dedupe removes all fetched candidates
 
 ---
 
@@ -394,6 +404,8 @@ The third case is not a clean skip. It means the fetch stage stopped early, so t
 The fourth case is not a clean skip either. It means the source stage failed before it could produce an honest search result.
 
 The fifth case is also not a clean skip. It means the source stage found unreposted candidates, but none of them had a usable `published_at_resolved`, so the selector could not classify or order them honestly.
+
+If `search_status = selection_ready` but deduplication removes every fetched candidate, the orchestrator must treat that as insufficient search coverage for a clean skip and surface the same non-zero outcome as `error_partial_search_scope`.
 
 ---
 
@@ -434,8 +446,9 @@ If `source_posts.json.posts` is empty and `search_status != full_search_complete
 1. do not emit a clean skip
 2. map `partial_search_scope` to `error_partial_search_scope`
 3. map `fetch_error` to `error_source_fetch_failed`
-4. telegram error status
-5. exit non-zero
+4. map invalid `selection_ready` plus empty `posts` to `error_source_fetch_failed`
+5. telegram error status
+6. exit non-zero
 
 ### 10.2 No eligible post after filtering
 
@@ -444,6 +457,13 @@ If the source stage completed a full enough search and all eligible fetched post
 1. write skip decision
 2. telegram info status explaining no unreposted source post exists
 3. exit `0`
+
+If `search_status = selection_ready` and all fetched posts are filtered out by repost history:
+
+1. do not emit `skip_no_eligible_post_after_full_search`
+2. treat the run as insufficient search coverage for backlog determination
+3. telegram error status
+4. exit non-zero as `error_partial_search_scope`
 
 ### 10.3 Partial search scope
 
@@ -478,20 +498,24 @@ Required test coverage:
 1. source normalization for multiple posts
 2. `web.facebook.com` normalization still works
 3. both Browser Use and agent-browser backends emit the same `source_posts.json` status fields
-4. selection picks newest unreposted post from today
-5. when today has no eligible post, selection picks newest unreposted backlog post
-6. already reposted posts are excluded by history
-7. `published_at_resolved` day classification respects `Asia/Ho_Chi_Minh`
-8. orchestrator writes `latest_source_post.json` from selected candidate
-9. orchestrator skip path works for:
+4. `selection_ready` allows publish success but not clean skip semantics
+5. selection picks newest unreposted post from today
+6. when today has no eligible post, selection picks newest unreposted backlog post
+7. already reposted posts are excluded by history
+8. cross-key dedupe matches URL-only history against later ID-bearing fetches of the same post
+9. `published_at_resolved` day classification respects `Asia/Ho_Chi_Minh`
+10. orchestrator writes `latest_source_post.json` from selected candidate
+11. orchestrator skip path works for:
    - zero fetched posts
    - zero eligible posts after full search
-10. empty `posts` with `partial_search_scope` does not report a false clean skip
-11. empty `posts` with `fetch_error` does not report a false clean skip
-12. partial-search scope does not report a false clean skip
-13. unresolved timestamps are not selected
-14. first run bootstraps repost history from `latest_reposted_source.json`
-15. unresolved-only candidates do not report a false clean skip
+12. empty `posts` with `partial_search_scope` does not report a false clean skip
+13. empty `posts` with `fetch_error` does not report a false clean skip
+14. invalid `selection_ready` plus empty `posts` is treated as a fetch error, not a clean skip
+15. `selection_ready` plus dedupe-empty result does not report a false clean skip
+16. partial-search scope does not report a false clean skip
+17. unresolved timestamps are not selected
+18. first run bootstraps repost history from `latest_reposted_source.json`
+19. unresolved-only candidates do not report a false clean skip
 
 The end-to-end smoke target remains:
 
