@@ -30,6 +30,26 @@ def test_normalize_latest_post_prefers_source_post_id():
     assert normalized["source_post_id"] == "123"
 
 
+def test_normalize_latest_post_extracts_numeric_id_from_slugged_posts_url():
+    payload = {
+        "source_page_url": "https://www.facebook.com/0xSojalSec",
+        "source_post_url": (
+            "https://www.facebook.com/0xSojalSec/posts/"
+            "in-1964-a-soon-to-be-nobel-laureate/1499861465001585/"
+        ),
+        "author": "0xSojalSec",
+        "published_at": "8h",
+        "content_text": "A useful post",
+        "media_urls": [],
+        "backend": "agent_browser",
+        "fetched_at": "2026-04-24T10:00:00Z",
+    }
+
+    normalized = normalize_latest_post(payload, backend="agent_browser")
+
+    assert normalized["source_post_id"] == "1499861465001585"
+
+
 def test_normalize_latest_post_rejects_empty_content():
     payload = {
         "source_page_url": "https://www.facebook.com/0xSojalSec",
@@ -298,6 +318,48 @@ def test_run_agent_browser_extract_uses_two_stage_open_wait_eval_flow(monkeypatc
     ]
     assert "--json" not in calls[0]
     assert "--json" not in calls[1]
+
+
+def test_run_agent_browser_extract_unwraps_json_envelope_and_backfills_fields(monkeypatch):
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if "eval" in cmd:
+            if len(calls) == 3:
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout=(
+                        '{"success":true,"data":{"origin":"https://www.facebook.com/0xSojalSec",'
+                        '"result":"https://www.facebook.com/0xSojalSec/posts/pfbid123"},"error":null}'
+                    ),
+                    stderr="",
+                )
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    '{"success":true,"data":{"origin":"https://www.facebook.com/0xSojalSec/posts/pfbid123",'
+                    '"result":{"source_page_url":"https://www.facebook.com/0xSojalSec/posts/pfbid123",'
+                    '"source_post_url":"https://www.facebook.com/0xSojalSec/posts/pfbid123",'
+                    '"published_at":"","relative_published_at":"8h","content_text":"A useful post",'
+                    '"author":"","media_urls":[]}},"error":null}'
+                ),
+                stderr="",
+            )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = run_agent_browser_extract(
+        page_url="https://www.facebook.com/0xSojalSec",
+        profile="facebook-profile",
+        session_name="session-1",
+        state_path="/tmp/state.json",
+    )
+
+    assert result["source_page_url"] == "https://www.facebook.com/0xSojalSec"
+    assert result["source_post_url"] == "https://www.facebook.com/0xSojalSec/posts/pfbid123"
+    assert result["published_at"] == "8h"
 
 
 def test_run_agent_browser_extract_fails_when_latest_post_url_not_found(monkeypatch):

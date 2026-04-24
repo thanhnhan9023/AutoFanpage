@@ -36,22 +36,42 @@ _LATEST_POST_URL_JS = """
 _EXTRACTION_JS = """
 (() => {
   const text = (value) => typeof value === "string" ? value.trim() : "";
+  const matchRelativeTime = (value) => {
+    const raw = text(value);
+    if (!raw) return "";
+    const exact = raw.match(/^(\\d+\\s*[smhdw]|Yesterday|Today|Just now)$/i);
+    if (exact) return exact[1];
+    const embedded = raw.match(/(?:^|\\s)(\\d+\\s*[smhdw]|Yesterday|Today|Just now)(?:\\s|$)/i);
+    return embedded ? embedded[1] : "";
+  };
   const content = (name) => {
     const el = document.querySelector(`meta[property="${name}"], meta[name="${name}"]`);
     return text(el?.content || "");
   };
+  const relativePublishedAt = (() => {
+    const nodes = Array.from(document.querySelectorAll("a[aria-label], a[href], span, div"));
+    for (const node of nodes) {
+      const candidate = matchRelativeTime(
+        node.getAttribute?.("aria-label") || node.textContent || ""
+      );
+      if (candidate) return candidate;
+    }
+    return "";
+  })();
+  const authorLink = document.querySelector("h1 a, h2 a, h3 a, strong a");
   const canonical = text(document.querySelector('link[rel="canonical"]')?.href || "");
-  const sourcePostUrl = canonical || content("og:url") || window.location.href;
-  const publishedAt = content("article:published_time") || text(document.querySelector("time")?.getAttribute("datetime") || "");
-  const author = content("author") || text(document.querySelector('meta[property="article:author"]')?.content || "");
+  const sourcePostUrl = window.location.origin + window.location.pathname || canonical || content("og:url");
+  const publishedAt = content("article:published_time") || text(document.querySelector("time")?.getAttribute("datetime") || "") || relativePublishedAt;
+  const author = content("author") || text(document.querySelector('meta[property="article:author"]')?.content || "") || text(authorLink?.textContent || "");
   const bodyText = text(document.body?.innerText || "").replace(/\\s+/g, " ").trim();
   const mediaUrls = Array.from(document.querySelectorAll("img[src], video[src]"))
     .map((el) => text(el.currentSrc || el.src || ""))
-    .filter(Boolean);
+    .filter((url) => Boolean(url) && !url.startsWith("data:"));
   return {
     source_page_url: window.location.origin + window.location.pathname,
     source_post_url: sourcePostUrl,
     published_at: publishedAt,
+    relative_published_at: relativePublishedAt,
     content_text: bodyText,
     author,
     media_urls: Array.from(new Set(mediaUrls)),
@@ -69,7 +89,47 @@ def _parse_agent_browser_json(raw_output: str, *, invalid_message: str) -> str |
         return payload.strip()
     if not isinstance(payload, dict):
         raise SourceFailedError("agent_browser returned non-object JSON")
+
+    if "success" in payload and "data" in payload:
+        if payload.get("success") is False:
+            message = str(payload.get("error") or "agent_browser reported failure").strip()
+            raise SourceFailedError(message)
+        data = payload.get("data")
+        if isinstance(data, dict) and "result" in data:
+            result = data["result"]
+            if isinstance(result, str):
+                return result.strip()
+            if isinstance(result, dict):
+                return result
+            raise SourceFailedError("agent_browser returned unsupported result type")
+        if isinstance(data, dict):
+            return data
+        if isinstance(data, str):
+            return data.strip()
+        raise SourceFailedError("agent_browser returned unsupported data type")
+
     return payload
+
+
+def _normalize_agent_browser_extract(
+    payload: dict,
+    *,
+    page_url: str,
+    latest_post_url: str,
+) -> dict:
+    normalized = dict(payload)
+    normalized["source_page_url"] = page_url
+    normalized["source_post_url"] = str(
+        normalized.get("source_post_url") or latest_post_url
+    ).strip() or latest_post_url
+
+    published_at = str(normalized.get("published_at") or "").strip()
+    if not published_at:
+        published_at = str(normalized.get("relative_published_at") or "").strip()
+    if published_at:
+        normalized["published_at"] = published_at
+
+    return normalized
 
 
 def _run_agent_browser_command(
@@ -143,4 +203,8 @@ def run_agent_browser_extract(
     )
     if isinstance(payload, str):
         raise SourceFailedError("agent_browser extraction returned string instead of object")
-    return payload
+    return _normalize_agent_browser_extract(
+        payload,
+        page_url=page_url,
+        latest_post_url=latest_post_url,
+    )

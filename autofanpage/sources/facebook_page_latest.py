@@ -24,6 +24,7 @@ def _extract_post_id(raw: dict[str, Any]) -> str | None:
         return None
 
     patterns = [
+        r"/posts/[^/?#]+/(\d+)(?:/|$)",
         r"/posts/([^/?#]+)",
         r"[?&]story_fbid=([^&#]+)",
         r"/permalink/([^/?#]+)",
