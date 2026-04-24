@@ -211,6 +211,15 @@ but the steady-state source of truth should become:
 
 - `reposted_source_posts.json`
 
+Known rollout limitation:
+
+1. the old system only persisted one pointer in `latest_reposted_source.json`
+2. therefore rollout can bootstrap only the most recent already-reposted source post
+3. older reposts from before this feature cannot be reconstructed automatically
+4. those older posts may reappear as eligible backlog after rollout if the new source scan reaches them
+
+This limitation is acceptable for this phase because the historical repost set does not exist anywhere in the current system.
+
 ---
 
 ## 6. Selection Logic
@@ -289,10 +298,19 @@ Recommended behavior:
 4. open candidate detail pages as needed to extract full text and metadata
 5. continue paging until one of these stop conditions is met:
    - at least one eligible candidate has been found, and every visible newer post has already been classified
-   - the feed cannot be paged further
+   - the backend has positively detected end-of-feed
    - the backend reaches an explicit hard safety cap such as `max_posts_scanned`
 
 The hard cap is an implementation safety limit, not a product rule. If a run stops because of the hard safety cap, the run must record that fact explicitly in logs/artifacts and may not claim backlog exhaustion.
+
+The selector may treat backlog as exhausted only after a positive end-of-feed signal. Conditions such as:
+
+1. DOM stall
+2. rate limiting
+3. login wall
+4. paging control missing unexpectedly
+
+must not be treated as feed exhaustion. They are `partial_search_scope` or another fetch error.
 
 ### 7.3 Backlog coverage contract
 
