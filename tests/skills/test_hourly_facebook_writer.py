@@ -13,7 +13,7 @@ sys.path.insert(0, str(SCRIPT))
 import write_repost  # noqa: E402
 
 
-def test_main_writes_single_active_repost_slot(tmp_path, fixtures_dir, mocker):
+def test_main_writes_single_active_repost_slot(tmp_path, fixtures_dir, mocker, capsys):
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     (run_dir / "latest_source_post.json").write_text(
@@ -53,7 +53,30 @@ def test_main_writes_single_active_repost_slot(tmp_path, fixtures_dir, mocker):
     assert (run_dir / "posts.json").exists()
 
     out = json.loads((run_dir / "posts.json").read_text(encoding="utf-8"))
-    populated = [post for post in out["posts"] if post["content"]]
-    assert len(populated) == 1
-    assert populated[0]["time"] == "10:15"
-    assert populated[0]["type"] == "news"
+    assert len(out["posts"]) == 4
+
+    first, second, third, fourth = out["posts"]
+    assert first["time"] == "10:15"
+    assert first["type"] == "news"
+    assert first["content"] == "Bai viet moi"
+    assert first["first_comment"] is None
+
+    assert second["time"] == "12:00"
+    assert second["type"] == "guide"
+    assert second["content"] is None
+    assert second["first_comment"] is None
+
+    assert third["time"] == "16:00"
+    assert third["type"] == "opinion"
+    assert third["content"] is None
+    assert third["first_comment"] is None
+
+    assert fourth["time"] == "20:00"
+    assert fourth["type"] == "case_study"
+    assert fourth["content"] is None
+    assert fourth["first_comment"] is None
+
+    stdout = capsys.readouterr().out.strip()
+    status = json.loads(stdout)
+    assert status["artifact"] == "posts.json"
+    assert status["posts_generated"] == 1

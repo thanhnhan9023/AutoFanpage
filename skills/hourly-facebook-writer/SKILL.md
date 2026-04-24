@@ -6,4 +6,5 @@ description: Rewrite one latest Facebook source post into a publisher-compatible
 # hourly-facebook-writer
 
 Inputs: `run_dir`, `profile`, `date`, `publish_time`
+Reads: `run_dir/latest_source_post.json`
 Writes: `posts.json`

@@ -69,11 +69,14 @@ def test_build_hourly_repost_prompt_includes_ai5phut_style_and_grounding():
         "source_post_url": "https://facebook.com/post/123",
     }
 
-    system, messages = build_hourly_repost_prompt(
+    _, messages = build_hourly_repost_prompt(
         source_post=source_post,
         language="vi",
         style="ai5phut",
     )
 
-    assert "ai5phut" in messages[0]["content"].lower()
-    assert "khong duoc" in system.lower() or "do not invent" in system.lower()
+    content = messages[0]["content"]
+    assert "ai5phut" in content.lower()
+    assert source_post["source_post_url"] in content
+    assert source_post["content_text"] in content
+    assert "khong duoc" in content.lower() or "do not invent" in content.lower()
