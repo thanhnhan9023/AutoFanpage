@@ -203,3 +203,27 @@ openclaw skills run autofanpage-health-check -- \
 Expected:
 - No stale pages if today's run succeeded.
 - Old run dirs (>30 days) pruned.
+
+## Hourly Facebook Latest Repost
+
+Example profile: `tests/fixtures/profile_hourly_facebook_repost.json`
+
+Run manually:
+
+```bash
+openclaw skills run hourly-facebook-repost-pipeline -- \
+  --page page_hourly_repost \
+  --profile-path ./tests/fixtures/profile_hourly_facebook_repost.json \
+  --base-dir ~/.openclaw/autofanpage \
+  --run-label "$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+```
+
+Cron example:
+
+```bash
+openclaw cron add --name "af-hourly-page_hourly_repost" \
+  --cron "0 * * * *" \
+  --session isolated \
+  --tz "Asia/Ho_Chi_Minh" \
+  --message "/hourly_facebook_repost_pipeline page=page_hourly_repost"
+```
