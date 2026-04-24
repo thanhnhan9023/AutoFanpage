@@ -43,7 +43,7 @@ These rules are the source of truth for selection:
 2. "Today" is evaluated in `profile.timezone`, currently `Asia/Ho_Chi_Minh`.
 3. If there are unreposted source posts whose publish date is today, choose the **newest** of those.
 4. If there are no unreposted source posts from today, choose the **newest** unreposted backlog post from previous days.
-5. Backlog is unbounded: if an unreposted post exists, it stays eligible until it is reposted.
+5. Backlog is unbounded at the product-rule level: if an unreposted post exists on the source page, it stays eligible until it is reposted.
 
 This means the queue is not FIFO. It is a priority rule:
 
@@ -125,6 +125,7 @@ The source fetch stage should emit a list artifact:
       "source_post_url": "https://www.facebook.com/0xSojalSec/posts/pfbid-1",
       "author": "0xSojalSec",
       "published_at": "2026-04-24T08:15:00+07:00",
+      "published_at_resolved": "2026-04-24T08:15:00+07:00",
       "content_text": "post body",
       "media_urls": [],
       "backend": "agent_browser",
@@ -136,9 +137,12 @@ The source fetch stage should emit a list artifact:
 
 Rules:
 
-1. `posts` must contain zero or more normalized items using the same per-post shape as current `latest_source_post.json`.
-2. `posts` should be sorted newest-first when emitted by the source layer.
-3. The source layer may include posts from previous days; selection rules decide what gets reposted.
+1. `posts` must contain zero or more normalized items using the same per-post shape as current `latest_source_post.json`, plus `published_at_resolved`.
+2. `published_at_resolved` is required and must be either:
+   - an ISO-8601 datetime string with timezone offset, or
+   - `null` when the fetch layer cannot resolve an absolute publish time
+3. `posts` should be sorted newest-first when emitted by the source layer.
+4. The source layer may include posts from previous days; selection rules decide what gets reposted.
 
 ### 5.2 Keep `latest_source_post.json`
 
@@ -172,6 +176,7 @@ Shape:
       "source_post_id": "pfbid-1",
       "source_post_url": "https://www.facebook.com/0xSojalSec/posts/pfbid-1",
       "published_at": "2026-04-24T08:15:00+07:00",
+      "published_at_resolved": "2026-04-24T08:15:00+07:00",
       "reposted_at": "2026-04-24T09:00:00+07:00",
       "run_dir": "/path/to/run"
     }
@@ -183,8 +188,9 @@ Rules:
 
 1. Deduplication key prefers `source_post_id`.
 2. If `source_post_id` is absent, fall back to `source_post_url`.
-3. History is append-only for now.
-4. `latest_reposted_source.json` stays as a convenience pointer for the most recent reposted item.
+3. History stores both raw `published_at` and machine-usable `published_at_resolved`.
+4. History is append-only for now.
+5. `latest_reposted_source.json` stays as a convenience pointer for the most recent reposted item.
 
 ---
 
@@ -193,15 +199,18 @@ Rules:
 Given `source_posts.json` and repost history:
 
 1. Remove any source post already present in repost history.
-2. Parse each post's `published_at` into a wall-clock datetime in `profile.timezone`.
-3. Partition remaining posts into:
+2. Use `published_at_resolved` as the authoritative selector timestamp.
+3. Convert `published_at_resolved` into `profile.timezone`.
+4. Partition remaining posts into:
    - `today_posts`
    - `backlog_posts`
-4. Sort both partitions newest-first.
-5. Choose:
+5. Sort both partitions newest-first by `published_at_resolved`.
+6. Choose:
    - first item of `today_posts` if non-empty
    - otherwise first item of `backlog_posts`
    - otherwise no-op / skip
+
+Posts with `published_at_resolved = null` are not eligible for selection in this phase. They remain in the fetched artifact for observability, but the selector must not guess their day bucket.
 
 ### 6.1 Day classification
 
@@ -209,7 +218,7 @@ Day classification must be based on profile timezone, not UTC date.
 
 For `Asia/Ho_Chi_Minh`, a post near midnight UTC may still belong to the next local day. The selector must therefore:
 
-1. parse/resolve `published_at`
+1. use `published_at_resolved`
 2. convert to profile timezone
 3. compare local calendar date with local "today"
 
@@ -224,13 +233,14 @@ Facebook extraction may yield relative timestamps such as:
 
 The selection logic cannot reliably classify "today" vs backlog using raw strings.
 
-Therefore the source normalization layer should produce a machine-usable absolute publish datetime when possible. The recommended approach is:
+Therefore the source normalization layer must produce a machine-usable absolute publish datetime when possible. The concrete contract is:
 
-1. continue preserving `published_at` for compatibility
-2. add a new normalized field such as `published_at_resolved`
+1. preserve `published_at` for compatibility and visibility
+2. add required field `published_at_resolved`
 3. when Facebook provides only relative time, resolve it against fetch time in the profile timezone
+4. if resolution fails, set `published_at_resolved = null`
 
-If absolute resolution is impossible for a post, that post should remain eligible but fall behind posts with resolved timestamps in sort order. The pipeline should not silently misclassify ambiguous data as "today".
+If absolute resolution is impossible for a post, the pipeline must not silently misclassify it as "today" or backlog.
 
 ---
 
@@ -258,9 +268,21 @@ Recommended behavior:
 2. collect recent top-level post URLs and visible timestamps
 3. normalize each candidate post URL
 4. open candidate detail pages as needed to extract full text and metadata
-5. stop after a bounded count, e.g. recent 10-20 posts
+5. continue paging until one of these stop conditions is met:
+   - at least one eligible candidate has been found, and every visible newer post has already been classified
+   - the feed cannot be paged further
+   - the backend reaches an explicit hard safety cap such as `max_posts_scanned`
 
-This keeps network cost bounded while still supporting same-day bursts and backlog replay.
+The hard cap is an implementation safety limit, not a product rule. If a run stops because of the hard safety cap, the run must record that fact explicitly in logs/artifacts and may not claim backlog exhaustion.
+
+### 7.3 Backlog coverage contract
+
+The source stage may not emit an arbitrary recent window and then treat backlog as exhausted.
+
+Allowed conclusions:
+
+1. `backlog_exhausted` only when the search scope was sufficient to support that conclusion
+2. `partial_search_scope` when the run stopped at a hard safety cap before backlog exhaustion could be established
 
 ---
 
@@ -281,6 +303,14 @@ to:
 5. continue through writer/image/publisher unchanged
 6. append selected candidate to repost history on success
 7. update `latest_reposted_source.json` pointer
+
+The orchestrator must distinguish between:
+
+1. `skip_no_posts_fetched`
+2. `skip_no_eligible_post_after_full_search`
+3. `error_partial_search_scope`
+
+The third case is not a clean skip. It means the fetch stage stopped early, so the system cannot honestly claim backlog exhaustion.
 
 ---
 
@@ -317,19 +347,28 @@ If `source_posts.json.posts` is empty:
 
 ### 10.2 No eligible post after filtering
 
-If all fetched posts are already in repost history:
+If the source stage completed a full enough search and all eligible fetched posts are already in repost history:
 
 1. write skip decision
 2. telegram info status explaining no unreposted source post exists
 3. exit `0`
 
-### 10.3 Ambiguous timestamps
+### 10.3 Partial search scope
+
+If the source stage stops because of a hard safety cap before it can establish whether backlog is exhausted:
+
+1. do not emit the same outcome as "no eligible post exists"
+2. write an error or partial-search artifact explaining the cap
+3. telegram error status
+4. exit non-zero
+
+### 10.4 Ambiguous timestamps
 
 If some posts cannot be resolved to a reliable absolute publish time:
 
-1. do not crash the whole run unless every candidate is ambiguous and selection is impossible
-2. prefer candidates with resolved timestamps
-3. include enough detail in logs/artifacts to explain why a candidate was deprioritized
+1. do not crash the whole run if at least one selectable candidate exists
+2. exclude unresolved posts from selection
+3. include enough detail in logs/artifacts to explain why a candidate was not selectable
 
 ---
 
@@ -346,7 +385,9 @@ Required test coverage:
 7. orchestrator writes `latest_source_post.json` from selected candidate
 8. orchestrator skip path works for:
    - zero fetched posts
-   - zero eligible posts
+   - zero eligible posts after full search
+9. partial-search scope does not report a false clean skip
+10. unresolved timestamps are not selected
 
 The end-to-end smoke target remains:
 
