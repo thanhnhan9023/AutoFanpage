@@ -49,6 +49,12 @@ def main(argv: list[str] | None = None) -> int:
         max_tokens=profile.writing.max_tokens,
         temperature=profile.writing.temperature,
     ).strip()
+    if not body:
+        raise AutofanpageError("generated repost body is empty")
+
+    placeholder_times = [t for t in profile.post_times if t != args.publish_time]
+    if len(placeholder_times) == len(profile.post_times):
+        placeholder_times = profile.post_times[1:]
 
     posts = {
         "language": profile.language,
@@ -60,19 +66,19 @@ def main(argv: list[str] | None = None) -> int:
                 "first_comment": None,
             },
             {
-                "time": profile.post_times[1],
+                "time": placeholder_times[0],
                 "type": "guide",
                 "content": None,
                 "first_comment": None,
             },
             {
-                "time": profile.post_times[2],
+                "time": placeholder_times[1],
                 "type": "opinion",
                 "content": None,
                 "first_comment": None,
             },
             {
-                "time": profile.post_times[3],
+                "time": placeholder_times[2],
                 "type": "case_study",
                 "content": None,
                 "first_comment": None,
