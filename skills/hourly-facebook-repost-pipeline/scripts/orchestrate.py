@@ -69,19 +69,6 @@ def main(argv: list[str] | None = None) -> int:
 
     run_dir = HourlyRunDir.create(base=base, page=args.page, run_label=args.run_label)
     log_path = run_dir.path / "orchestrate.log"
-    if profile.publishing_backend not in (None, "facebook_graph"):
-        _report(
-            run_dir.path,
-            status="error",
-            page=args.page,
-            details={
-                "phase": "preflight",
-                "cause": "hourly repost pipeline requires a Graph-compatible destination profile",
-                "log_tail": "(preflight)",
-            },
-        )
-        return 1
-
     date = args.date or datetime.now(tz=ZoneInfo(profile.timezone)).strftime("%Y-%m-%d")
     state = LatestRepostedSource(base=base, page=args.page)
     started = time.monotonic()
@@ -131,6 +118,21 @@ def main(argv: list[str] | None = None) -> int:
                 "publish_time": publish_time,
             },
         )
+        if profile.publishing.images.enabled:
+            _log(
+                log_path,
+                "image_generation enabled provider="
+                f"{profile.publishing.images.provider} candidates="
+                f"{profile.publishing.images.candidate_count}",
+            )
+            run_skill(
+                "hourly-facebook-image-generator",
+                {
+                    "run_dir": str(run_dir.path),
+                    "profile": args.profile_path,
+                    "date": date,
+                },
+            )
         run_skill(
             "facebook-publisher",
             {
