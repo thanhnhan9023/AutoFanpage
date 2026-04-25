@@ -52,6 +52,7 @@ _RECENT_POST_URLS_JS = """
     href.includes("/permalink/");
   const seen = new Set();
   const postUrls = [];
+  let candidateCount = 0;
   const feedRoots = Array.from(document.querySelectorAll('div[role="feed"], div[role="main"]'));
   const links = feedRoots.length
     ? feedRoots.flatMap((root) => Array.from(root.querySelectorAll('a[href]')))
@@ -59,10 +60,12 @@ _RECENT_POST_URLS_JS = """
   for (const link of links) {
     if (!link.closest('div[role="article"]')) continue;
     const url = normalize(link.getAttribute("href") || "");
-    if (!url || !isPostUrl(url) || seen.has(url)) continue;
+    if (!url || !isPostUrl(url)) continue;
     if (!url.startsWith("https://www.facebook.com/") && !url.startsWith("https://facebook.com/")) {
       continue;
     }
+    candidateCount += 1;
+    if (seen.has(url)) continue;
     seen.add(url);
     postUrls.push(url);
   }
@@ -81,7 +84,7 @@ _RECENT_POST_URLS_JS = """
     source_page_url: window.location.origin + window.location.pathname,
     fetched_at: new Date().toISOString(),
     end_of_feed_reached: endOfFeedReached,
-    posts_scanned: postUrls.length,
+    posts_scanned: candidateCount,
     post_urls: postUrls,
     scroll_y: scrollY,
     viewport_height: viewportHeight,
@@ -369,6 +372,22 @@ def _scroll_recent_post_feed(*, base_cmd: list[str]) -> dict:
     return scroll_payload
 
 
+def _dedupe_extracted_posts(posts: list[dict]) -> list[dict]:
+    deduped: list[dict] = []
+    seen_keys: set[tuple[str, str]] = set()
+
+    for post in posts:
+        source_post_id = str(post.get("source_post_id") or "").strip()
+        source_post_url = str(post.get("source_post_url") or "").strip()
+        dedupe_key = (source_post_id, source_post_url)
+        if dedupe_key in seen_keys:
+            continue
+        seen_keys.add(dedupe_key)
+        deduped.append(post)
+
+    return deduped
+
+
 def run_agent_browser_extract(
     *,
     page_url: str,
@@ -451,7 +470,8 @@ def run_agent_browser_extract_posts(
         else:
             posts_scanned = max(posts_scanned, int(raw_posts_scanned))
 
-        end_of_feed_reached = bool(scan_payload.get("end_of_feed_reached"))
+        reached_loaded_dom_bottom = bool(scan_payload.get("end_of_feed_reached"))
+        end_of_feed_reached = bool(scan_payload.get("confirmed_end_of_feed_reached"))
         snapshot_key = (
             tuple(collected_post_urls),
             int(scan_payload.get("scroll_y") or 0),
@@ -468,10 +488,19 @@ def run_agent_browser_extract_posts(
             scan_stopped_reason = "selection_limit_reached"
             break
 
+        if reached_loaded_dom_bottom:
+            if collected_post_urls:
+                search_status = "selection_ready"
+                scan_stopped_reason = "loaded_dom_exhausted"
+            else:
+                search_status = "partial_search_scope"
+                scan_stopped_reason = "loaded_dom_exhausted"
+            break
+
         if not discovered_new_url and snapshot_key == previous_snapshot_key:
             stalled_passes += 1
             if stalled_passes >= _AGENT_BROWSER_MAX_STALLED_PASSES:
-                search_status = "partial_search_scope"
+                search_status = "selection_ready" if collected_post_urls else "partial_search_scope"
                 scan_stopped_reason = "dom_stall"
                 break
         else:
@@ -483,10 +512,10 @@ def run_agent_browser_extract_posts(
         search_status = "partial_search_scope"
         scan_stopped_reason = "max_scroll_steps"
 
-    posts = [
+    posts = _dedupe_extracted_posts([
         _extract_post_from_url(base_cmd=base_cmd, page_url=page_url, post_url=post_url)
         for post_url in collected_post_urls
-    ]
+    ])
 
     if search_status == "fetch_error" and posts:
         search_status = "partial_search_scope"

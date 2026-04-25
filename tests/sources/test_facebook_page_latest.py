@@ -754,7 +754,72 @@ def test_run_agent_browser_extract_posts_uses_scan_then_post_detail_flow(monkeyp
     assert result["posts"][0]["published_at"] == "8h"
 
 
-def test_run_agent_browser_extract_posts_reports_full_search_complete_when_feed_is_exhausted(
+def test_run_agent_browser_extract_posts_dedupes_posts_that_canonicalize_to_same_source(
+    monkeypatch,
+):
+    current_url = ""
+
+    def fake_run(cmd, **kwargs):
+        nonlocal current_url
+        if "open" in cmd:
+            current_url = cmd[-1]
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        if "eval" in cmd:
+            if current_url == "https://www.facebook.com/0xSojalSec":
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout=(
+                        '{"success":true,"data":{"result":{"source_page_url":"https://www.facebook.com/0xSojalSec",'
+                        '"fetched_at":"2026-04-25T03:05:00Z","end_of_feed_reached":true,'
+                        '"posts_scanned":3,"post_urls":['
+                        '"https://www.facebook.com/0xSojalSec/posts/pfbidA?__tn__=%2CO-R",'
+                        '"https://www.facebook.com/0xSojalSec/permalink/alt-pfbidA",'
+                        '"https://www.facebook.com/0xSojalSec/posts/pfbidB"]}}}'
+                    ),
+                    stderr="",
+                )
+            if "pfbidB" in current_url:
+                canonical = "https://www.facebook.com/0xSojalSec/posts/pfbidB"
+                body = "Unique post B"
+            else:
+                canonical = "https://www.facebook.com/0xSojalSec/posts/pfbidA"
+                body = "Canonicalized post A"
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    '{"success":true,"data":{"result":{"source_page_url":"'
+                    + canonical
+                    + '","source_post_url":"'
+                    + canonical
+                    + '","published_at":"1h","relative_published_at":"1h",'
+                    '"header_published_at":"","header_relative_published_at":"1h",'
+                    '"content_text":"'
+                    + body
+                    + '","author":"0xSojalSec","media_urls":[]}}}'
+                ),
+                stderr="",
+            )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = run_agent_browser_extract_posts(
+        page_url="https://www.facebook.com/0xSojalSec",
+        profile="facebook-profile",
+        session_name="session-1",
+        state_path="/tmp/state.json",
+    )
+
+    assert result["search_status"] == "selection_ready"
+    assert result["scan_stopped_reason"] == "loaded_dom_exhausted"
+    assert result["posts_scanned"] == 3
+    assert [post["source_post_url"] for post in result["posts"]] == [
+        "https://www.facebook.com/0xSojalSec/posts/pfbidA",
+        "https://www.facebook.com/0xSojalSec/posts/pfbidB",
+    ]
+
+
+def test_run_agent_browser_extract_posts_treats_loaded_dom_bottom_as_selection_ready_window(
     monkeypatch,
 ):
     current_url = ""
@@ -802,13 +867,15 @@ def test_run_agent_browser_extract_posts_reports_full_search_complete_when_feed_
         state_path="/tmp/state.json",
     )
 
-    assert result["search_status"] == "full_search_complete"
-    assert result["end_of_feed_reached"] is True
-    assert result["scan_stopped_reason"] == "end_of_feed"
+    assert result["search_status"] == "selection_ready"
+    assert result["end_of_feed_reached"] is False
+    assert result["scan_stopped_reason"] == "loaded_dom_exhausted"
     assert result["posts_scanned"] == 3
 
 
-def test_run_agent_browser_extract_posts_reports_partial_scope_when_scan_stalls(monkeypatch):
+def test_run_agent_browser_extract_posts_reports_selection_ready_when_scan_stalls_after_collecting_posts(
+    monkeypatch,
+):
     page_scan_evals = 0
     current_url = ""
 
@@ -865,10 +932,56 @@ def test_run_agent_browser_extract_posts_reports_partial_scope_when_scan_stalls(
         state_path="/tmp/state.json",
     )
 
-    assert result["search_status"] == "partial_search_scope"
+    assert result["search_status"] == "selection_ready"
     assert result["end_of_feed_reached"] is False
     assert result["scan_stopped_reason"] == "dom_stall"
     assert result["posts_scanned"] == 2
+
+
+def test_run_agent_browser_extract_posts_reports_partial_scope_when_scan_stalls_without_posts(
+    monkeypatch,
+):
+    page_scan_evals = 0
+
+    def fake_run(cmd, **kwargs):
+        nonlocal page_scan_evals
+        if "eval" in cmd:
+            script = cmd[-1]
+            if "window.scrollTo" in script:
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout=(
+                        '{"success":true,"data":{"result":{"scroll_y":0,'
+                        '"scroll_height":2400,"viewport_height":900}}}'
+                    ),
+                    stderr="",
+                )
+            page_scan_evals += 1
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    '{"success":true,"data":{"result":{"source_page_url":"https://www.facebook.com/0xSojalSec",'
+                    '"fetched_at":"2026-04-25T03:05:00Z","end_of_feed_reached":false,'
+                    '"posts_scanned":0,"post_urls":[]}}}'
+                ),
+                stderr="",
+            )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = run_agent_browser_extract_posts(
+        page_url="https://www.facebook.com/0xSojalSec",
+        profile="facebook-profile",
+        session_name="session-1",
+        state_path="/tmp/state.json",
+    )
+
+    assert result["search_status"] == "partial_search_scope"
+    assert result["end_of_feed_reached"] is False
+    assert result["scan_stopped_reason"] == "dom_stall"
+    assert result["posts_scanned"] == 0
+    assert result["posts"] == []
 
 
 def test_run_agent_browser_extract_fails_when_latest_post_url_not_found(monkeypatch):
