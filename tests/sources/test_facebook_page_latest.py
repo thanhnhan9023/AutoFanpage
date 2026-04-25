@@ -3,7 +3,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from autofanpage.agent_browser import run_agent_browser_extract
+import autofanpage.agent_browser as agent_browser_module
+from autofanpage.agent_browser import (
+    run_agent_browser_extract,
+    run_agent_browser_extract_posts,
+)
 from autofanpage.browser_use import run_browser_use_task
 from autofanpage.errors import SourceFailedError
 from autofanpage.sources.facebook_page_latest import (
@@ -301,8 +305,56 @@ def test_fetch_source_posts_from_page_uses_agent_browser_backend_and_resolves_ti
         "state_path": "/tmp/state.json",
     }
     assert result["backend"] == "agent_browser"
-    assert result["search_status"] == "selection_ready"
+    assert result["search_status"] == "partial_search_scope"
     assert result["posts"][0]["published_at_resolved"] == "2026-04-25T02:05:00+07:00"
+
+
+def test_fetch_source_posts_from_page_uses_browser_use_multi_post_branch(monkeypatch):
+    seen: dict[str, object] = {}
+
+    def fake_run_browser_use_task(*, task, output_schema, profile_id=None):
+        seen["task"] = task
+        seen["output_schema"] = output_schema
+        seen["profile_id"] = profile_id
+        return {
+            "source_page_url": "https://www.facebook.com/0xSojalSec",
+            "fetched_at": "2026-04-25T03:05:00Z",
+            "search_status": "selection_ready",
+            "end_of_feed_reached": False,
+            "scan_stopped_reason": "selection_limit_reached",
+            "posts_scanned": 2,
+            "posts": [
+                {
+                    "source_post_url": "https://www.facebook.com/0xSojalSec/posts/123",
+                    "author": "0xSojalSec",
+                    "published_at": "2h",
+                    "content_text": "Recent public post",
+                    "media_urls": [],
+                }
+            ],
+        }
+
+    monkeypatch.setattr(
+        "autofanpage.sources.facebook_page_latest.run_browser_use_task",
+        fake_run_browser_use_task,
+    )
+
+    result = fetch_source_posts_from_page(
+        {
+            "enabled": True,
+            "page_url": "https://www.facebook.com/0xSojalSec",
+            "backend": "browser_use_mcp",
+            "browser_use_profile_id": "browser-profile",
+        },
+        profile_timezone="Asia/Ho_Chi_Minh",
+    )
+
+    assert seen["profile_id"] == "browser-profile"
+    assert "recent top-level public posts" in seen["task"]
+    assert seen["output_schema"]["additionalProperties"] is False
+    assert seen["output_schema"]["properties"]["posts"]["items"]["additionalProperties"] is False
+    assert result["search_status"] == "selection_ready"
+    assert result["posts"][0]["published_at_resolved"] == "2026-04-25T08:05:00+07:00"
 
 
 def test_run_browser_use_task_uses_mcporter_args_flag(monkeypatch):
@@ -491,6 +543,104 @@ def test_run_agent_browser_extract_unwraps_json_envelope_and_backfills_fields(mo
     assert result["source_page_url"] == "https://www.facebook.com/0xSojalSec"
     assert result["source_post_url"] == "https://www.facebook.com/0xSojalSec/posts/pfbid123"
     assert result["published_at"] == "8h"
+
+
+def test_normalize_agent_browser_extract_prefers_header_timestamp_signal():
+    result = agent_browser_module._normalize_agent_browser_extract(
+        {
+            "source_page_url": "https://www.facebook.com/0xSojalSec/posts/pfbid123",
+            "source_post_url": "https://www.facebook.com/0xSojalSec/posts/pfbid123",
+            "published_at": "1h",
+            "relative_published_at": "1h",
+            "header_published_at": "",
+            "header_relative_published_at": "8h",
+            "content_text": "A useful post",
+            "author": "",
+            "media_urls": [],
+        },
+        page_url="https://www.facebook.com/0xSojalSec",
+        latest_post_url="https://www.facebook.com/0xSojalSec/posts/pfbid123",
+    )
+
+    assert result["published_at"] == "8h"
+
+
+def test_run_agent_browser_extract_posts_uses_scan_then_post_detail_flow(monkeypatch):
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if "eval" in cmd:
+            if len(calls) == 3:
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout=(
+                        '{"success":true,"data":{"result":{"source_page_url":"https://www.facebook.com/0xSojalSec",'
+                        '"fetched_at":"2026-04-25T03:05:00Z","search_status":"selection_ready",'
+                        '"end_of_feed_reached":false,"scan_stopped_reason":"selection_limit_reached",'
+                        '"posts_scanned":4,"post_urls":["https://www.facebook.com/0xSojalSec/posts/123"]}}}'
+                    ),
+                    stderr="",
+                )
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    '{"success":true,"data":{"result":{"source_page_url":"https://www.facebook.com/0xSojalSec/posts/123",'
+                    '"source_post_url":"https://www.facebook.com/0xSojalSec/posts/123",'
+                    '"published_at":"1h","relative_published_at":"1h","header_published_at":"",'
+                    '"header_relative_published_at":"8h","content_text":"A useful post",'
+                    '"author":"0xSojalSec","media_urls":[]}}}'
+                ),
+                stderr="",
+            )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = run_agent_browser_extract_posts(
+        page_url="https://www.facebook.com/0xSojalSec",
+        profile="facebook-profile",
+        session_name="session-1",
+        state_path="/tmp/state.json",
+    )
+
+    assert len(calls) == 6
+    assert calls[0] == [
+        "agent-browser",
+        "--profile",
+        "facebook-profile",
+        "--session-name",
+        "session-1",
+        "--state",
+        "/tmp/state.json",
+        "open",
+        "https://www.facebook.com/0xSojalSec",
+    ]
+    assert calls[2][:8] == [
+        "agent-browser",
+        "--profile",
+        "facebook-profile",
+        "--session-name",
+        "session-1",
+        "--state",
+        "/tmp/state.json",
+        "eval",
+    ]
+    assert calls[3] == [
+        "agent-browser",
+        "--profile",
+        "facebook-profile",
+        "--session-name",
+        "session-1",
+        "--state",
+        "/tmp/state.json",
+        "open",
+        "https://www.facebook.com/0xSojalSec/posts/123",
+    ]
+    assert result["search_status"] == "partial_search_scope"
+    assert result["scan_stopped_reason"] == "top_level_candidate_scan"
+    assert result["posts_scanned"] == 4
+    assert result["posts"][0]["published_at"] == "8h"
 
 
 def test_run_agent_browser_extract_fails_when_latest_post_url_not_found(monkeypatch):

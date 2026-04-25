@@ -50,9 +50,12 @@ _RECENT_POST_URLS_JS = """
   const limit = 5;
   const seen = new Set();
   const postUrls = [];
-
-  const links = Array.from(document.querySelectorAll('a[href]'));
+  const feedRoots = Array.from(document.querySelectorAll('div[role="feed"], div[role="main"]'));
+  const links = feedRoots.length
+    ? feedRoots.flatMap((root) => Array.from(root.querySelectorAll('a[href]')))
+    : Array.from(document.querySelectorAll('a[href]'));
   for (const link of links) {
+    if (!link.closest('div[role="article"]')) continue;
     const url = normalize(link.getAttribute("href") || "");
     if (!url || !isPostUrl(url) || seen.has(url)) continue;
     if (!url.startsWith("https://www.facebook.com/") && !url.startsWith("https://facebook.com/")) {
@@ -66,9 +69,9 @@ _RECENT_POST_URLS_JS = """
   return {
     source_page_url: window.location.origin + window.location.pathname,
     fetched_at: new Date().toISOString(),
-    search_status: postUrls.length ? "selection_ready" : "fetch_error",
+    search_status: postUrls.length ? "partial_search_scope" : "fetch_error",
     end_of_feed_reached: false,
-    scan_stopped_reason: postUrls.length ? "selection_limit_reached" : "no_posts_found",
+    scan_stopped_reason: postUrls.length ? "top_level_candidate_scan" : "no_posts_found",
     posts_scanned: postUrls.length,
     post_urls: postUrls,
   };
@@ -77,6 +80,14 @@ _RECENT_POST_URLS_JS = """
 _EXTRACTION_JS = """
 (() => {
   const text = (value) => typeof value === "string" ? value.trim() : "";
+  const normalize = (href) => {
+    if (typeof href !== "string" || !href.trim()) return "";
+    try {
+      return new URL(href, window.location.href).toString();
+    } catch (_err) {
+      return "";
+    }
+  };
   const matchRelativeTime = (value) => {
     const raw = text(value);
     if (!raw) return "";
@@ -89,8 +100,50 @@ _EXTRACTION_JS = """
     const el = document.querySelector(`meta[property="${name}"], meta[name="${name}"]`);
     return text(el?.content || "");
   };
+  const canonical = text(document.querySelector('link[rel="canonical"]')?.href || "");
+  const sourcePostUrl = window.location.origin + window.location.pathname || canonical || content("og:url");
+  const currentPostHref = (node) => {
+    const href = normalize(node?.getAttribute?.("href") || "");
+    return Boolean(href) && (
+      href === sourcePostUrl ||
+      href.replace(/#.*$/, "") === sourcePostUrl ||
+      sourcePostUrl.replace(/#.*$/, "") === href
+    );
+  };
+  const headerNodes = (() => {
+    const selectors = [
+      "time[datetime]",
+      "a[aria-label][href]",
+      "a[href][role='link']",
+      "span[aria-label]",
+    ];
+    const article = document.querySelector("div[role='article']");
+    const roots = [article, document.querySelector("main"), document.body].filter(Boolean);
+    const nodes = [];
+    for (const root of roots) {
+      for (const selector of selectors) {
+        for (const node of root.querySelectorAll(selector)) {
+          if (selector !== "time[datetime]" && node.tagName === "A" && !currentPostHref(node)) {
+            continue;
+          }
+          nodes.push(node);
+        }
+      }
+      if (nodes.length) return nodes;
+    }
+    return nodes;
+  })();
+  const headerRelativePublishedAt = (() => {
+    for (const node of headerNodes) {
+      const candidate = matchRelativeTime(
+        node.getAttribute?.("aria-label") || node.textContent || ""
+      );
+      if (candidate) return candidate;
+    }
+    return "";
+  })();
   const relativePublishedAt = (() => {
-    const nodes = Array.from(document.querySelectorAll("a[aria-label], a[href], span, div"));
+    const nodes = Array.from(document.querySelectorAll("time[datetime], a[aria-label][href]"));
     for (const node of nodes) {
       const candidate = matchRelativeTime(
         node.getAttribute?.("aria-label") || node.textContent || ""
@@ -100,9 +153,14 @@ _EXTRACTION_JS = """
     return "";
   })();
   const authorLink = document.querySelector("h1 a, h2 a, h3 a, strong a");
-  const canonical = text(document.querySelector('link[rel="canonical"]')?.href || "");
-  const sourcePostUrl = window.location.origin + window.location.pathname || canonical || content("og:url");
-  const publishedAt = content("article:published_time") || text(document.querySelector("time")?.getAttribute("datetime") || "") || relativePublishedAt;
+  const headerPublishedAt = text(
+    headerNodes.find((node) => node.tagName === "TIME")?.getAttribute("datetime") || ""
+  );
+  const publishedAt = content("article:published_time")
+    || headerPublishedAt
+    || text(document.querySelector("time")?.getAttribute("datetime") || "")
+    || headerRelativePublishedAt
+    || relativePublishedAt;
   const author = content("author") || text(document.querySelector('meta[property="article:author"]')?.content || "") || text(authorLink?.textContent || "");
   const bodyText = text(document.body?.innerText || "").replace(/\\s+/g, " ").trim();
   const mediaUrls = Array.from(document.querySelectorAll("img[src], video[src]"))
@@ -112,6 +170,8 @@ _EXTRACTION_JS = """
     source_page_url: window.location.origin + window.location.pathname,
     source_post_url: sourcePostUrl,
     published_at: publishedAt,
+    header_published_at: headerPublishedAt,
+    header_relative_published_at: headerRelativePublishedAt,
     relative_published_at: relativePublishedAt,
     content_text: bodyText,
     author,
@@ -164,7 +224,11 @@ def _normalize_agent_browser_extract(
         normalized.get("source_post_url") or latest_post_url
     ).strip() or latest_post_url
 
-    published_at = str(normalized.get("published_at") or "").strip()
+    published_at = str(normalized.get("header_published_at") or "").strip()
+    if not published_at:
+        published_at = str(normalized.get("header_relative_published_at") or "").strip()
+    if not published_at:
+        published_at = str(normalized.get("published_at") or "").strip()
     if not published_at:
         published_at = str(normalized.get("relative_published_at") or "").strip()
     if published_at:
@@ -310,19 +374,27 @@ def run_agent_browser_extract_posts(
         if str(post_url).strip()
     ]
 
+    if posts:
+        search_status = "partial_search_scope"
+        scan_stopped_reason = "top_level_candidate_scan"
+    else:
+        raw_search_status = str(scan_payload.get("search_status") or "").strip()
+        search_status = raw_search_status or "fetch_error"
+        scan_stopped_reason = (
+            str(scan_payload.get("scan_stopped_reason") or "").strip()
+            or "no_posts_found"
+        )
+
     return {
         "source_page_url": str(scan_payload.get("source_page_url") or page_url).strip() or page_url,
         "fetched_at": str(scan_payload.get("fetched_at") or "").strip(),
-        "search_status": str(scan_payload.get("search_status") or "").strip() or "selection_ready",
+        "search_status": search_status,
         "end_of_feed_reached": (
             scan_payload.get("end_of_feed_reached")
             if isinstance(scan_payload.get("end_of_feed_reached"), bool)
             else False
         ),
-        "scan_stopped_reason": (
-            str(scan_payload.get("scan_stopped_reason") or "").strip()
-            or "selection_limit_reached"
-        ),
+        "scan_stopped_reason": scan_stopped_reason,
         "posts_scanned": int(scan_payload.get("posts_scanned") or len(posts)),
         "posts": posts,
     }
