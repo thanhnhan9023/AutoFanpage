@@ -41,6 +41,61 @@ def _run(env, *, profile_path=None):
     )
 
 
+def _run_dir(env):
+    return env["base"] / "runs" / env["page"] / "hourly" / "2026-04-23T10-00-00Z"
+
+
+def _source_post(
+    *,
+    source_post_id="123",
+    source_post_url=None,
+    published_at="2026-04-23T09:15:00Z",
+    published_at_resolved=None,
+    content_text="A useful post",
+    backend="browser_use_mcp",
+):
+    if source_post_url is None:
+        source_post_url = f"https://www.facebook.com/0xSojalSec/posts/{source_post_id}"
+    return {
+        "source_page_url": "https://www.facebook.com/0xSojalSec",
+        "source_post_id": source_post_id,
+        "source_post_url": source_post_url,
+        "author": "0xSojalSec",
+        "published_at": published_at,
+        "published_at_resolved": published_at_resolved or published_at,
+        "content_text": content_text,
+        "media_urls": [],
+        "backend": backend,
+        "fetched_at": "2026-04-23T10:00:00Z",
+    }
+
+
+def _source_posts(
+    posts,
+    *,
+    search_status="selection_ready",
+    end_of_feed_reached=None,
+    scan_stopped_reason=None,
+    backend="browser_use_mcp",
+    fetched_at="2026-04-23T10:00:00Z",
+    posts_scanned=None,
+):
+    if end_of_feed_reached is None:
+        end_of_feed_reached = search_status == "full_search_complete"
+    if scan_stopped_reason is None:
+        scan_stopped_reason = "end_of_feed" if end_of_feed_reached else search_status
+    return {
+        "source_page_url": "https://www.facebook.com/0xSojalSec",
+        "backend": backend,
+        "fetched_at": fetched_at,
+        "search_status": search_status,
+        "end_of_feed_reached": end_of_feed_reached,
+        "scan_stopped_reason": scan_stopped_reason,
+        "posts_scanned": len(posts) if posts_scanned is None else posts_scanned,
+        "posts": posts,
+    }
+
+
 def test_duplicate_source_post_skips_writer_and_publisher(env, mocker):
     state_path = env["base"] / "state" / env["page"] / "latest_reposted_source.json"
     state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -64,19 +119,12 @@ def test_duplicate_source_post_skips_writer_and_publisher(env, mocker):
         run_dir = Path(args["run_dir"])
         if name == "facebook-page-latest-researcher":
             run_dir.mkdir(parents=True, exist_ok=True)
-            (run_dir / "latest_source_post.json").write_text(
+            (run_dir / "source_posts.json").write_text(
                 json.dumps(
-                    {
-                        "source_page_url": "https://www.facebook.com/0xSojalSec",
-                        "source_post_id": "123",
-                        "source_post_url": "https://www.facebook.com/0xSojalSec/posts/123",
-                        "author": "0xSojalSec",
-                        "published_at": "2026-04-23T09:15:00Z",
-                        "content_text": "A useful post",
-                        "media_urls": [],
-                        "backend": "browser_use_mcp",
-                        "fetched_at": "2026-04-23T10:00:00Z",
-                    }
+                    _source_posts(
+                        [_source_post()],
+                        search_status="full_search_complete",
+                    )
                 ),
                 encoding="utf-8",
             )
@@ -100,20 +148,8 @@ def test_new_source_post_runs_writer_and_publisher_and_marks_state(env, mocker):
         run_dir.mkdir(parents=True, exist_ok=True)
 
         if name == "facebook-page-latest-researcher":
-            (run_dir / "latest_source_post.json").write_text(
-                json.dumps(
-                    {
-                        "source_page_url": "https://www.facebook.com/0xSojalSec",
-                        "source_post_id": "123",
-                        "source_post_url": "https://www.facebook.com/0xSojalSec/posts/123",
-                        "author": "0xSojalSec",
-                        "published_at": "2026-04-23T09:15:00Z",
-                        "content_text": "A useful post",
-                        "media_urls": [],
-                        "backend": "browser_use_mcp",
-                        "fetched_at": "2026-04-23T10:00:00Z",
-                    }
-                ),
+            (run_dir / "source_posts.json").write_text(
+                json.dumps(_source_posts([_source_post()])),
                 encoding="utf-8",
             )
             return {"status": "ok"}
@@ -186,12 +222,22 @@ def test_new_source_post_runs_writer_and_publisher_and_marks_state(env, mocker):
     rc = _run(env)
 
     assert rc == 0
+    latest_source_post = json.loads(
+        (_run_dir(env) / "latest_source_post.json").read_text(encoding="utf-8")
+    )
+    assert latest_source_post["source_post_id"] == "123"
     marker = json.loads(
         (env["base"] / "state" / env["page"] / "latest_reposted_source.json").read_text(
             encoding="utf-8"
         )
     )
     assert marker["source_post_id"] == "123"
+    history = json.loads(
+        (env["base"] / "state" / env["page"] / "reposted_source_posts.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert history["items"][0]["source_post_id"] == "123"
 
 
 def test_mixpost_destination_profile_runs_writer_and_publisher(env, mocker, tmp_path):
@@ -216,20 +262,8 @@ def test_mixpost_destination_profile_runs_writer_and_publisher(env, mocker, tmp_
         run_dir.mkdir(parents=True, exist_ok=True)
 
         if name == "facebook-page-latest-researcher":
-            (run_dir / "latest_source_post.json").write_text(
-                json.dumps(
-                    {
-                        "source_page_url": "https://www.facebook.com/0xSojalSec",
-                        "source_post_id": "123",
-                        "source_post_url": "https://www.facebook.com/0xSojalSec/posts/123",
-                        "author": "0xSojalSec",
-                        "published_at": "2026-04-23T09:15:00Z",
-                        "content_text": "A useful post",
-                        "media_urls": [],
-                        "backend": "browser_use_mcp",
-                        "fetched_at": "2026-04-23T10:00:00Z",
-                    }
-                ),
+            (run_dir / "source_posts.json").write_text(
+                json.dumps(_source_posts([_source_post()])),
                 encoding="utf-8",
             )
             return {"status": "ok"}
@@ -295,20 +329,8 @@ def test_zero_successful_publish_results_returns_failure_without_marking_state(
         run_dir.mkdir(parents=True, exist_ok=True)
 
         if name == "facebook-page-latest-researcher":
-            (run_dir / "latest_source_post.json").write_text(
-                json.dumps(
-                    {
-                        "source_page_url": "https://www.facebook.com/0xSojalSec",
-                        "source_post_id": "123",
-                        "source_post_url": "https://www.facebook.com/0xSojalSec/posts/123",
-                        "author": "0xSojalSec",
-                        "published_at": "2026-04-23T09:15:00Z",
-                        "content_text": "A useful post",
-                        "media_urls": [],
-                        "backend": "browser_use_mcp",
-                        "fetched_at": "2026-04-23T10:00:00Z",
-                    }
-                ),
+            (run_dir / "source_posts.json").write_text(
+                json.dumps(_source_posts([_source_post()])),
                 encoding="utf-8",
             )
             return {"status": "ok"}
@@ -377,20 +399,8 @@ def test_downstream_skill_failure_returns_error_and_reports_error_status(env, mo
         run_dir.mkdir(parents=True, exist_ok=True)
 
         if name == "facebook-page-latest-researcher":
-            (run_dir / "latest_source_post.json").write_text(
-                json.dumps(
-                    {
-                        "source_page_url": "https://www.facebook.com/0xSojalSec",
-                        "source_post_id": "123",
-                        "source_post_url": "https://www.facebook.com/0xSojalSec/posts/123",
-                        "author": "0xSojalSec",
-                        "published_at": "2026-04-23T09:15:00Z",
-                        "content_text": "A useful post",
-                        "media_urls": [],
-                        "backend": "browser_use_mcp",
-                        "fetched_at": "2026-04-23T10:00:00Z",
-                    }
-                ),
+            (run_dir / "source_posts.json").write_text(
+                json.dumps(_source_posts([_source_post()])),
                 encoding="utf-8",
             )
             return {"status": "ok"}
@@ -423,20 +433,8 @@ def test_telegram_reporter_failure_does_not_flip_successful_publish_run(
         run_dir.mkdir(parents=True, exist_ok=True)
 
         if name == "facebook-page-latest-researcher":
-            (run_dir / "latest_source_post.json").write_text(
-                json.dumps(
-                    {
-                        "source_page_url": "https://www.facebook.com/0xSojalSec",
-                        "source_post_id": "123",
-                        "source_post_url": "https://www.facebook.com/0xSojalSec/posts/123",
-                        "author": "0xSojalSec",
-                        "published_at": "2026-04-23T09:15:00Z",
-                        "content_text": "A useful post",
-                        "media_urls": [],
-                        "backend": "browser_use_mcp",
-                        "fetched_at": "2026-04-23T10:00:00Z",
-                    }
-                ),
+            (run_dir / "source_posts.json").write_text(
+                json.dumps(_source_posts([_source_post()])),
                 encoding="utf-8",
             )
             return {"status": "ok"}
@@ -530,19 +528,12 @@ def test_mixpost_with_images_runs_generator_before_publisher(env, mocker, tmp_pa
         run_dir.mkdir(parents=True, exist_ok=True)
 
         if name == "facebook-page-latest-researcher":
-            (run_dir / "latest_source_post.json").write_text(
+            (run_dir / "source_posts.json").write_text(
                 json.dumps(
-                    {
-                        "source_page_url": "https://www.facebook.com/0xSojalSec",
-                        "source_post_id": "123",
-                        "source_post_url": "https://www.facebook.com/0xSojalSec/posts/123",
-                        "author": "0xSojalSec",
-                        "published_at": "2026-04-23T09:15:00Z",
-                        "content_text": "A useful post",
-                        "media_urls": [],
-                        "backend": "agent_browser",
-                        "fetched_at": "2026-04-23T10:00:00Z",
-                    }
+                    _source_posts(
+                        [_source_post(backend="agent_browser")],
+                        backend="agent_browser",
+                    )
                 ),
                 encoding="utf-8",
             )
@@ -652,3 +643,113 @@ def test_mixpost_with_images_runs_generator_before_publisher(env, mocker, tmp_pa
         "hourly-facebook-image-generator",
         "facebook-publisher",
     ]
+
+
+def test_full_search_complete_with_no_posts_skips_cleanly(env, mocker):
+    calls = []
+
+    def fake(name, args):
+        calls.append((name, args))
+        run_dir = Path(args["run_dir"])
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        if name == "facebook-page-latest-researcher":
+            (run_dir / "source_posts.json").write_text(
+                json.dumps(_source_posts([], search_status="full_search_complete")),
+                encoding="utf-8",
+            )
+            return {"status": "ok"}
+
+        if name == "telegram-reporter":
+            return {"status": "ok"}
+
+        raise AssertionError(f"unexpected skill {name}")
+
+    mocker.patch("orchestrate.run_skill", side_effect=fake)
+
+    rc = _run(env)
+
+    assert rc == 0
+    assert "hourly-facebook-writer" not in [name for name, _args in calls]
+    decision = json.loads(
+        (_run_dir(env) / "repost_decision.json").read_text(encoding="utf-8")
+    )
+    assert decision["action"] == "skip"
+    assert decision["reason"] == "skip_no_posts_fetched_after_full_search"
+
+
+@pytest.mark.parametrize(
+    ("source_posts", "expected_cause"),
+    [
+        (
+            _source_posts(
+                [_source_post()],
+                search_status="selection_ready",
+            ),
+            "error_partial_search_scope",
+        ),
+        (
+            _source_posts(
+                [],
+                search_status="selection_ready",
+                posts_scanned=0,
+            ),
+            "error_source_fetch_failed",
+        ),
+    ],
+)
+def test_selector_error_paths_return_non_zero_and_report_selector_reason(
+    env, mocker, source_posts, expected_cause
+):
+    state_path = env["base"] / "state" / env["page"] / "reposted_source_posts.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "source_post_id": None,
+                        "source_post_url": "https://www.facebook.com/0xSojalSec/posts/123",
+                        "published_at": "2026-04-23T09:15:00Z",
+                        "published_at_resolved": "2026-04-23T09:15:00Z",
+                        "reposted_at": "2026-04-23T09:30:00Z",
+                        "run_dir": "/tmp/old-run",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    calls = []
+
+    def fake(name, args):
+        calls.append((name, args))
+        run_dir = Path(args["run_dir"])
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        if name == "facebook-page-latest-researcher":
+            (run_dir / "source_posts.json").write_text(
+                json.dumps(source_posts),
+                encoding="utf-8",
+            )
+            return {"status": "ok"}
+
+        if name == "telegram-reporter":
+            return {"status": "ok"}
+
+        raise AssertionError(f"unexpected skill {name}")
+
+    mocker.patch("orchestrate.run_skill", side_effect=fake)
+
+    rc = _run(env)
+
+    assert rc == 1
+    assert "hourly-facebook-writer" not in [name for name, _args in calls]
+    decision = json.loads(
+        (_run_dir(env) / "repost_decision.json").read_text(encoding="utf-8")
+    )
+    assert decision["action"] == "error"
+    assert decision["reason"] == expected_cause
+    telegram = [args for name, args in calls if name == "telegram-reporter"]
+    assert telegram[0]["details"]["cause"] == expected_cause

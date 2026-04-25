@@ -14,8 +14,9 @@ sys.path.insert(0, str(_ROOT))
 
 from autofanpage.dispatch import run_skill
 from autofanpage.errors import AutofanpageError, SkillInvocationError
+from autofanpage.hourly_repost_selector import select_source_post
 from autofanpage.hourly_run_dir import HourlyRunDir
-from autofanpage.hourly_state import LatestRepostedSource
+from autofanpage.hourly_state import LatestRepostedSource, RepostedSourceHistory
 from autofanpage.profile import load_profile
 from autofanpage.schemas import validate
 
@@ -71,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     log_path = run_dir.path / "orchestrate.log"
     date = args.date or datetime.now(tz=ZoneInfo(profile.timezone)).strftime("%Y-%m-%d")
     state = LatestRepostedSource(base=base, page=args.page)
+    repost_history = RepostedSourceHistory(base=base, page=args.page)
     started = time.monotonic()
     _log(log_path, f"start page={args.page} date={date}")
 
@@ -83,29 +85,42 @@ def main(argv: list[str] | None = None) -> int:
             },
         )
 
-        latest_post = json.loads(
-            (run_dir.path / "latest_source_post.json").read_text(encoding="utf-8")
+        source_posts = json.loads(
+            (run_dir.path / "source_posts.json").read_text(encoding="utf-8")
         )
-        if state.matches(latest_post):
-            repost_decision = {
-                "action": "skip_duplicate",
-                "reason": "latest source post already reposted",
-                "source_post_id": latest_post.get("source_post_id"),
-                "source_post_url": latest_post["source_post_url"],
-            }
-            validate("repost_decision", repost_decision)
-            (run_dir.path / "repost_decision.json").write_text(
-                json.dumps(repost_decision, indent=2),
-                encoding="utf-8",
-            )
-            _log(log_path, f"skip duplicate source_post_url={latest_post['source_post_url']}")
+        repost_decision = select_source_post(
+            source_posts=source_posts,
+            repost_history=repost_history.read_or_bootstrap(),
+            profile_timezone=profile.timezone,
+        )
+        (run_dir.path / "repost_decision.json").write_text(
+            json.dumps(repost_decision, indent=2),
+            encoding="utf-8",
+        )
+
+        action = repost_decision["action"]
+        reason = repost_decision["reason"]
+        _log(log_path, f"selector action={action} reason={reason}")
+
+        if action == "skip":
             _report(
                 run_dir.path,
                 status="info",
                 page=args.page,
-                details={"message": f"Skip duplicate source post: {latest_post['source_post_url']}"},
+                details={"message": reason},
             )
             return 0
+        if action == "error":
+            raise AutofanpageError(reason)
+        if action != "publish":
+            raise AutofanpageError(f"unexpected repost decision action: {action}")
+
+        latest_post = repost_decision["selected_post"]
+        validate("latest_source_post", latest_post)
+        (run_dir.path / "latest_source_post.json").write_text(
+            json.dumps(latest_post, indent=2),
+            encoding="utf-8",
+        )
 
         publish_time = _next_publish_time(profile.timezone)
         _log(log_path, f"publish_time={publish_time}")
@@ -151,6 +166,10 @@ def main(argv: list[str] | None = None) -> int:
                 "hourly repost publish_results.json recorded no successful posts"
             )
 
+        repost_history.append(
+            latest_post,
+            run_dir=str(run_dir.path),
+        )
         state.mark(
             source_post_id=latest_post.get("source_post_id"),
             source_post_url=latest_post["source_post_url"],
