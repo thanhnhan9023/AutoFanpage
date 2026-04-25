@@ -89,6 +89,16 @@ def _matches_record(left: dict[str, Any], right: dict[str, Any]) -> bool:
     return bool(left_url and right_url and left_url == right_url)
 
 
+def _enrich_identifiers(
+    existing: dict[str, Any], incoming: dict[str, Any]
+) -> dict[str, Any]:
+    enriched = dict(existing)
+    for key in ("source_post_id", "source_post_url"):
+        if not enriched.get(key) and incoming.get(key):
+            enriched[key] = incoming[key]
+    return enriched
+
+
 @dataclass(frozen=True)
 class RepostedSourceHistory:
     base: Path
@@ -140,13 +150,7 @@ class RepostedSourceHistory:
         if not self.path.exists():
             return self._bootstrap_from_latest()
 
-        try:
-            return self._read_valid()
-        except ValueError:
-            bootstrapped = self._bootstrap_from_latest()
-            if bootstrapped["items"]:
-                return bootstrapped
-            raise
+        return self._read_valid()
 
     def contains(self, source_post: dict[str, Any]) -> bool:
         history = self.read_or_bootstrap()
@@ -172,7 +176,7 @@ class RepostedSourceHistory:
         items = list(history["items"])
         for index, item in enumerate(items):
             if _matches_record(item, payload):
-                items[index] = payload
+                items[index] = _enrich_identifiers(item, payload)
                 break
         else:
             items.append(payload)
