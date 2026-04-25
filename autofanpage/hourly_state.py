@@ -106,14 +106,12 @@ class RepostedSourceHistory:
     def _empty(self) -> dict[str, list[dict[str, Any]]]:
         return {"items": []}
 
-    def _read(self) -> dict[str, Any] | None:
-        if not self.path.exists():
-            return None
+    def _read_valid(self) -> dict[str, Any]:
         try:
             payload = json.loads(self.path.read_text())
             validate("reposted_source_posts", payload)
-        except (OSError, json.JSONDecodeError, SchemaError):
-            return None
+        except (OSError, json.JSONDecodeError, SchemaError) as exc:
+            raise ValueError(f"invalid repost history file: {self.path}") from exc
         return payload
 
     def _bootstrap_from_latest(self) -> dict[str, Any]:
@@ -139,12 +137,16 @@ class RepostedSourceHistory:
         return payload
 
     def read_or_bootstrap(self) -> dict[str, Any]:
-        current = self._read()
-        if current is not None:
-            return current
-        if self.path.exists():
-            return self._empty()
-        return self._bootstrap_from_latest()
+        if not self.path.exists():
+            return self._bootstrap_from_latest()
+
+        try:
+            return self._read_valid()
+        except ValueError:
+            bootstrapped = self._bootstrap_from_latest()
+            if bootstrapped["items"]:
+                return bootstrapped
+            raise
 
     def contains(self, source_post: dict[str, Any]) -> bool:
         history = self.read_or_bootstrap()
@@ -154,6 +156,7 @@ class RepostedSourceHistory:
         self,
         source_post: dict[str, Any],
         *,
+        run_dir: str,
         reposted_at: str | None = None,
     ) -> None:
         history = self.read_or_bootstrap()
@@ -163,7 +166,7 @@ class RepostedSourceHistory:
             "published_at": source_post["published_at"],
             "published_at_resolved": source_post.get("published_at_resolved"),
             "reposted_at": reposted_at or datetime.now(timezone.utc).isoformat(),
-            "run_dir": str(source_post["run_dir"]),
+            "run_dir": str(run_dir),
         }
 
         items = list(history["items"])

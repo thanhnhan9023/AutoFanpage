@@ -76,7 +76,7 @@ def select_source_post(
 
     if not posts and search_status == "full_search_complete":
         return {"action": "skip", "reason": "skip_no_posts_fetched_after_full_search"}
-    if not posts and search_status == "fetch_error":
+    if not posts and search_status in {"fetch_error", "selection_ready"}:
         return {"action": "error", "reason": "error_source_fetch_failed"}
     if not posts:
         return {"action": "error", "reason": "error_partial_search_scope"}

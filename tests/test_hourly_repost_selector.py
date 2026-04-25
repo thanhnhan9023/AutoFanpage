@@ -104,6 +104,27 @@ def test_select_source_post_returns_partial_scope_error_when_selection_ready_ded
     assert result["reason"] == "error_partial_search_scope"
 
 
+def test_select_source_post_returns_fetch_error_when_selection_ready_has_empty_posts():
+    result = select_source_post(
+        source_posts={
+            "source_page_url": "https://www.facebook.com/0xSojalSec",
+            "backend": "agent_browser",
+            "fetched_at": "2026-04-24T03:00:00Z",
+            "search_status": "selection_ready",
+            "end_of_feed_reached": False,
+            "scan_stopped_reason": "selection_ready",
+            "posts_scanned": 0,
+            "posts": [],
+        },
+        repost_history={"items": []},
+        profile_timezone="Asia/Ho_Chi_Minh",
+        now_iso="2026-04-24T10:00:00+07:00",
+    )
+
+    assert result["action"] == "error"
+    assert result["reason"] == "error_source_fetch_failed"
+
+
 def test_select_source_post_errors_when_only_unresolved_unreposted_candidates_remain():
     result = select_source_post(
         source_posts={
