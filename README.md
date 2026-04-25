@@ -2,6 +2,61 @@
 
 Automated social-media fanpage pipeline powered by OpenClaw skills.
 
+## Workflow Docs
+
+Per-workflow documentation lives next to each skill:
+
+- `skills/autofanpage-health-check/README.md`
+- `skills/daily-content-pipeline/README.md`
+- `skills/facebook-page-latest-researcher/README.md`
+- `skills/facebook-publisher/README.md`
+- `skills/hackernews-researcher/README.md`
+- `skills/hourly-facebook-image-generator/README.md`
+- `skills/hourly-facebook-repost-pipeline/README.md`
+- `skills/hourly-facebook-writer/README.md`
+- `skills/notebooklm-analyzer/README.md`
+- `skills/perplexity-researcher/README.md`
+- `skills/reddit-researcher/README.md`
+- `skills/reddit-researcher-apify/README.md`
+- `skills/review-agent/README.md`
+- `skills/telegram-reporter/README.md`
+- `skills/writing-agent/README.md`
+- `skills/youtube-researcher/README.md`
+
+### Workflow Summary
+
+#### Daily Workflows
+
+| Workflow | Main artifacts | Main secrets / services |
+| --- | --- | --- |
+| `daily-content-pipeline` | `merged_sources.json`, `insights.json`, `reviewed_insights.json`, `posts.json`, `publish_results.json` / `preview.md` | source secrets by enabled source, NotebookLM MCP, writer API key, publish backend |
+| `facebook-publisher` | `publish_results.json` or `preview.md` | Facebook page token or Mixpost session state |
+| `hackernews-researcher` | `hackernews_results.json` | none |
+| `notebooklm-analyzer` | `insights.json` | NotebookLM MCP login/session |
+| `perplexity-researcher` | `perplexity_results.json` | `perplexity_api_key` or `tavily_api_key` |
+| `reddit-researcher` | `reddit_results.json` | `reddit_client_id`, `reddit_client_secret` |
+| `reddit-researcher-apify` | `reddit_results.json` | `apify_api_token` |
+| `review-agent` | `reviewed_insights.json` | none |
+| `writing-agent` | `posts.json` | writer API key/model |
+| `youtube-researcher` | `youtube_results.json` | `youtube_api_key` |
+
+#### Hourly Workflows
+
+| Workflow | Main artifacts | Main secrets / services |
+| --- | --- | --- |
+| `facebook-page-latest-researcher` | `source_posts.json` | `browser_use_mcp` or `agent_browser` session/profile |
+| `hourly-facebook-image-generator` | `post_assets.json`, `assets/*` | `useapi_token`, optional CapSolver, optional Codex Imagen auth, optional ZAI key |
+| `hourly-facebook-repost-pipeline` | `source_posts.json`, `repost_decision.json`, `latest_source_post.json`, `posts.json`, `publish_results.json` | Facebook source backend, writer config, optional image provider, publish backend |
+| `hourly-facebook-writer` | `posts.json`, `review_feedback.json` | writer API key/model, optional review API key/model |
+| `facebook-publisher` | `publish_results.json` or `preview.md` | Facebook page token or Mixpost session state |
+
+#### Shared / Support Workflows
+
+| Workflow | Main artifacts | Main secrets / services |
+| --- | --- | --- |
+| `autofanpage-health-check` | stale-page report, prune summary | Telegram reporting path |
+| `telegram-reporter` | `telegram_sent.log` | caller-provided details payload |
+
 ## Smoke test — Plan 2 (Phase 1 data gathering)
 
 After `pip install -e ".[dev]"` and `bash scripts/install-skills.sh`:
