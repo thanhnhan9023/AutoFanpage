@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from autofanpage.hourly_state import LatestRepostedSource
+from autofanpage.hourly_state import LatestRepostedSource, RepostedSourceHistory
 
 
 def test_latest_reposted_source_round_trip(tmp_path):
@@ -86,3 +86,54 @@ def test_latest_reposted_source_matches_returns_false_for_corrupt_state(tmp_path
             "source_post_url": "https://facebook.com/post/123",
         }
     )
+
+
+def test_reposted_source_history_bootstraps_from_latest_pointer(tmp_path):
+    latest = LatestRepostedSource(base=tmp_path, page="page_hourly_repost")
+    latest.mark(
+        source_post_id=None,
+        source_post_url="https://www.facebook.com/0xSojalSec/posts/123",
+        published_at="2026-04-24T08:15:00+07:00",
+        run_dir="/tmp/old-run",
+    )
+
+    history = RepostedSourceHistory(base=tmp_path, page="page_hourly_repost")
+    items = history.read_or_bootstrap()
+
+    assert len(items["items"]) == 1
+    assert items["items"][0]["source_post_url"].endswith("/123")
+
+
+def test_reposted_source_history_matches_cross_key_and_enriches(tmp_path):
+    history = RepostedSourceHistory(base=tmp_path, page="page_hourly_repost")
+    history.append(
+        {
+            "source_post_id": None,
+            "source_post_url": "https://www.facebook.com/0xSojalSec/posts/123",
+            "published_at": "2026-04-24T08:15:00+07:00",
+            "published_at_resolved": "2026-04-24T08:15:00+07:00",
+            "run_dir": "/tmp/run-1",
+        }
+    )
+
+    assert history.contains(
+        {
+            "source_post_id": "123",
+            "source_post_url": "https://www.facebook.com/0xSojalSec/posts/123",
+        }
+    )
+
+    history.append(
+        {
+            "source_post_id": "123",
+            "source_post_url": "https://www.facebook.com/0xSojalSec/posts/123",
+            "published_at": "2026-04-24T08:15:00+07:00",
+            "published_at_resolved": "2026-04-24T08:15:00+07:00",
+            "run_dir": "/tmp/run-2",
+        }
+    )
+
+    items = history.read_or_bootstrap()["items"]
+    assert len(items) == 1
+    assert items[0]["source_post_id"] == "123"
+    assert items[0]["run_dir"] == "/tmp/run-2"
