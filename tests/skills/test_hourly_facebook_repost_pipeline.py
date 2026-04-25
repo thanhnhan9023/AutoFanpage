@@ -1,4 +1,5 @@
 import json
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -13,8 +14,13 @@ SCRIPT = (
     / "hourly-facebook-repost-pipeline"
     / "scripts"
 )
-sys.path.insert(0, str(SCRIPT))
-import orchestrate  # noqa: E402
+SPEC = importlib.util.spec_from_file_location(
+    "hourly_facebook_repost_orchestrate",
+    SCRIPT / "orchestrate.py",
+)
+assert SPEC is not None and SPEC.loader is not None
+orchestrate = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(orchestrate)
 
 
 @pytest.fixture
@@ -133,7 +139,7 @@ def test_duplicate_source_post_skips_writer_and_publisher(env, mocker):
             return {"status": "ok"}
         raise AssertionError(f"unexpected skill {name}")
 
-    mocker.patch("orchestrate.run_skill", side_effect=fake)
+    mocker.patch.object(orchestrate, "run_skill", side_effect=fake)
 
     rc = _run(env)
 
@@ -243,7 +249,7 @@ def test_selection_ready_backlog_drains_past_already_reposted_newer_posts(env, m
 
         raise AssertionError(f"unexpected skill {name}")
 
-    mocker.patch("orchestrate.run_skill", side_effect=fake)
+    mocker.patch.object(orchestrate, "run_skill", side_effect=fake)
 
     rc = _run(env)
 
@@ -331,7 +337,7 @@ def test_new_source_post_runs_writer_and_publisher_and_marks_state(env, mocker):
 
         raise AssertionError(f"unexpected skill {name}")
 
-    mocker.patch("orchestrate.run_skill", side_effect=fake)
+    mocker.patch.object(orchestrate, "run_skill", side_effect=fake)
 
     rc = _run(env)
 
@@ -437,7 +443,7 @@ def test_mixpost_destination_profile_runs_writer_and_publisher(env, mocker, tmp_
 
         raise AssertionError(f"unexpected skill {name}")
 
-    mocker.patch("orchestrate.run_skill", side_effect=fake)
+    mocker.patch.object(orchestrate, "run_skill", side_effect=fake)
 
     rc = _run(env, profile_path=mixpost_profile)
 
@@ -504,7 +510,7 @@ def test_zero_successful_publish_results_returns_failure_without_marking_state(
 
         raise AssertionError(f"unexpected skill {name}")
 
-    mocker.patch("orchestrate.run_skill", side_effect=fake)
+    mocker.patch.object(orchestrate, "run_skill", side_effect=fake)
 
     rc = _run(env)
 
@@ -540,7 +546,7 @@ def test_downstream_skill_failure_returns_error_and_reports_error_status(env, mo
 
         raise AssertionError(f"unexpected skill {name}")
 
-    mocker.patch("orchestrate.run_skill", side_effect=fake)
+    mocker.patch.object(orchestrate, "run_skill", side_effect=fake)
 
     rc = _run(env)
 
@@ -611,7 +617,7 @@ def test_telegram_reporter_failure_does_not_flip_successful_publish_run(
 
         raise AssertionError(f"unexpected skill {name}")
 
-    mocker.patch("orchestrate.run_skill", side_effect=fake)
+    mocker.patch.object(orchestrate, "run_skill", side_effect=fake)
 
     rc = _run(env)
 
@@ -759,7 +765,7 @@ def test_mixpost_with_images_runs_generator_before_publisher(env, mocker, tmp_pa
 
         raise AssertionError(f"unexpected skill {name}")
 
-    mocker.patch("orchestrate.run_skill", side_effect=fake)
+    mocker.patch.object(orchestrate, "run_skill", side_effect=fake)
 
     rc = _run(env, profile_path=mixpost_profile)
 
@@ -792,7 +798,7 @@ def test_full_search_complete_with_no_posts_skips_cleanly(env, mocker):
 
         raise AssertionError(f"unexpected skill {name}")
 
-    mocker.patch("orchestrate.run_skill", side_effect=fake)
+    mocker.patch.object(orchestrate, "run_skill", side_effect=fake)
 
     rc = _run(env)
 
@@ -867,7 +873,7 @@ def test_selector_error_paths_return_non_zero_and_report_selector_reason(
 
         raise AssertionError(f"unexpected skill {name}")
 
-    mocker.patch("orchestrate.run_skill", side_effect=fake)
+    mocker.patch.object(orchestrate, "run_skill", side_effect=fake)
 
     rc = _run(env)
 
