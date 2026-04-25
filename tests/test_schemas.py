@@ -681,6 +681,7 @@ def test_latest_source_post_schema_accepts_valid():
         "source_post_url": "https://www.facebook.com/0xSojalSec/posts/1234567890",
         "author": "0xSojalSec",
         "published_at": "2026-04-15T06:00:00+07:00",
+        "published_at_resolved": "2026-04-15T06:00:00+07:00",
         "content_text": "Latest post text",
         "media_urls": ["https://example.com/image.jpg"],
         "backend": "browser_use_mcp",
@@ -696,6 +697,7 @@ def test_latest_source_post_schema_rejects_missing_required_field():
             "source_post_url": "https://www.facebook.com/0xSojalSec/posts/1234567890",
             "author": "0xSojalSec",
             "published_at": "2026-04-15T06:00:00+07:00",
+            "published_at_resolved": "2026-04-15T06:00:00+07:00",
             "media_urls": ["https://example.com/image.jpg"],
             "backend": "browser_use_mcp",
             "fetched_at": "2026-04-15T06:05:00+07:00",
@@ -727,5 +729,61 @@ def test_latest_reposted_source_schema_rejects_missing_run_dir():
             "source_post_id": "1234567890",
             "source_post_url": "https://www.facebook.com/0xSojalSec/posts/1234567890",
             "published_at": "2026-04-15T06:00:00+07:00",
+            "published_at_resolved": "2026-04-15T06:00:00+07:00",
             "reposted_at": "2026-04-15T06:10:00+07:00",
         })
+
+
+def test_source_posts_schema_accepts_full_search_complete_payload():
+    validate("source_posts", {
+        "source_page_url": "https://www.facebook.com/0xSojalSec",
+        "backend": "browser_use_mcp",
+        "fetched_at": "2026-04-25T03:05:00Z",
+        "search_status": "full_search_complete",
+        "end_of_feed_reached": True,
+        "scan_stopped_reason": "end_of_feed",
+        "posts_scanned": 8,
+        "posts": [
+            {
+                "source_page_url": "https://www.facebook.com/0xSojalSec",
+                "source_post_id": "1234567890",
+                "source_post_url": "https://www.facebook.com/0xSojalSec/posts/1234567890",
+                "author": "0xSojalSec",
+                "published_at": "2026-04-25T02:40:00Z",
+                "published_at_resolved": "2026-04-25T02:40:00Z",
+                "content_text": "Latest post text",
+                "media_urls": ["https://example.com/image.jpg"],
+                "backend": "browser_use_mcp",
+                "fetched_at": "2026-04-25T03:05:00Z",
+            },
+        ],
+    })
+
+
+def test_source_posts_schema_rejects_selection_ready_with_empty_posts():
+    with pytest.raises(SchemaError):
+        validate("source_posts", {
+            "source_page_url": "https://www.facebook.com/0xSojalSec",
+            "backend": "agent_browser",
+            "fetched_at": "2026-04-25T03:05:00Z",
+            "search_status": "selection_ready",
+            "end_of_feed_reached": False,
+            "scan_stopped_reason": "selection_limit_reached",
+            "posts_scanned": 4,
+            "posts": [],
+        })
+
+
+def test_reposted_source_posts_schema_accepts_history_items():
+    validate("reposted_source_posts", {
+        "items": [
+            {
+                "source_post_id": "1234567890",
+                "source_post_url": "https://www.facebook.com/0xSojalSec/posts/1234567890",
+                "published_at": "2026-04-25T02:40:00Z",
+                "published_at_resolved": "2026-04-25T02:40:00Z",
+                "reposted_at": "2026-04-25T03:10:00Z",
+                "run_dir": "runs/2026-04-25/hourly-facebook-latest-repost",
+            },
+        ],
+    })

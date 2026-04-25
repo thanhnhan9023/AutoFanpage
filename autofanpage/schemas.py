@@ -198,8 +198,7 @@ LAST_SUCCESS_SCHEMA: dict[str, Any] = {
     },
 }
 
-
-LATEST_SOURCE_POST_SCHEMA: dict[str, Any] = {
+SOURCE_POST_SCHEMA: dict[str, Any] = {
     "type": "object",
     "required": [
         "source_page_url",
@@ -207,6 +206,7 @@ LATEST_SOURCE_POST_SCHEMA: dict[str, Any] = {
         "source_post_url",
         "author",
         "published_at",
+        "published_at_resolved",
         "content_text",
         "media_urls",
         "backend",
@@ -218,6 +218,7 @@ LATEST_SOURCE_POST_SCHEMA: dict[str, Any] = {
         "source_post_url": {"type": "string"},
         "author": {"type": "string"},
         "published_at": {"type": "string"},
+        "published_at_resolved": {"type": "string"},
         "content_text": {"type": "string", "minLength": 1},
         "media_urls": {"type": "array", "items": {"type": "string"}},
         "backend": {
@@ -229,12 +230,68 @@ LATEST_SOURCE_POST_SCHEMA: dict[str, Any] = {
 }
 
 
-LATEST_REPOSTED_SOURCE_SCHEMA: dict[str, Any] = {
+LATEST_SOURCE_POST_SCHEMA: dict[str, Any] = SOURCE_POST_SCHEMA
+
+
+SOURCE_POSTS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": [
+        "source_page_url",
+        "backend",
+        "fetched_at",
+        "search_status",
+        "end_of_feed_reached",
+        "scan_stopped_reason",
+        "posts_scanned",
+        "posts",
+    ],
+    "properties": {
+        "source_page_url": {"type": "string"},
+        "backend": {
+            "type": "string",
+            "enum": ["browser_use_mcp", "agent_browser"],
+        },
+        "fetched_at": {"type": "string"},
+        "search_status": {
+            "type": "string",
+            "enum": [
+                "full_search_complete",
+                "selection_ready",
+                "partial_search_scope",
+                "fetch_error",
+            ],
+        },
+        "end_of_feed_reached": {"type": "boolean"},
+        "scan_stopped_reason": {"type": "string"},
+        "posts_scanned": {"type": "integer", "minimum": 0},
+        "posts": {
+            "type": "array",
+            "items": SOURCE_POST_SCHEMA,
+        },
+    },
+    "allOf": [
+        {
+            "if": {
+                "properties": {"search_status": {"const": "selection_ready"}},
+                "required": ["search_status"],
+            },
+            "then": {
+                "properties": {
+                    "posts": {"minItems": 1},
+                },
+            },
+        },
+    ],
+}
+
+
+REPOSTED_SOURCE_POST_SCHEMA: dict[str, Any] = {
     "type": "object",
     "required": [
         "source_post_id",
         "source_post_url",
         "published_at",
+        "published_at_resolved",
         "reposted_at",
         "run_dir",
     ],
@@ -242,8 +299,24 @@ LATEST_REPOSTED_SOURCE_SCHEMA: dict[str, Any] = {
         "source_post_id": {"type": ["string", "null"]},
         "source_post_url": {"type": "string"},
         "published_at": {"type": "string"},
+        "published_at_resolved": {"type": "string"},
         "reposted_at": {"type": "string"},
         "run_dir": {"type": "string"},
+    },
+}
+
+
+LATEST_REPOSTED_SOURCE_SCHEMA: dict[str, Any] = REPOSTED_SOURCE_POST_SCHEMA
+
+
+REPOSTED_SOURCE_POSTS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": ["items"],
+    "properties": {
+        "items": {
+            "type": "array",
+            "items": REPOSTED_SOURCE_POST_SCHEMA,
+        },
     },
 }
 
@@ -601,7 +674,9 @@ _SCHEMAS = {
     "hackernews_results": HACKERNEWS_RESULTS_SCHEMA,
     "last_success": LAST_SUCCESS_SCHEMA,
     "latest_source_post": LATEST_SOURCE_POST_SCHEMA,
+    "source_posts": SOURCE_POSTS_SCHEMA,
     "latest_reposted_source": LATEST_REPOSTED_SOURCE_SCHEMA,
+    "reposted_source_posts": REPOSTED_SOURCE_POSTS_SCHEMA,
     "repost_decision": REPOST_DECISION_SCHEMA,
     "youtube_results": YOUTUBE_RESULTS_SCHEMA,
     "perplexity_results": PERPLEXITY_RESULTS_SCHEMA,
