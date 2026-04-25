@@ -567,32 +567,81 @@ def test_normalize_agent_browser_extract_prefers_header_timestamp_signal():
 
 def test_run_agent_browser_extract_posts_uses_scan_then_post_detail_flow(monkeypatch):
     calls: list[list[str]] = []
+    page_scan_evals = 0
+    current_url = ""
 
     def fake_run(cmd, **kwargs):
         calls.append(cmd)
+        nonlocal page_scan_evals, current_url
+        if "open" in cmd:
+            current_url = cmd[-1]
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
         if "eval" in cmd:
-            if len(calls) == 3:
+            script = cmd[-1]
+            if current_url == "https://www.facebook.com/0xSojalSec":
+                if "window.scrollTo" in script:
+                    return SimpleNamespace(
+                        returncode=0,
+                        stdout=(
+                            '{"success":true,"data":{"result":{"scroll_y":1800,'
+                            '"scroll_height":3600,"viewport_height":900}}}'
+                        ),
+                        stderr="",
+                    )
+                page_scan_evals += 1
+                if page_scan_evals == 1:
+                    return SimpleNamespace(
+                        returncode=0,
+                        stdout=(
+                            '{"success":true,"data":{"result":{"source_page_url":"https://www.facebook.com/0xSojalSec",'
+                            '"fetched_at":"2026-04-25T03:05:00Z","end_of_feed_reached":false,'
+                            '"posts_scanned":5,"post_urls":['
+                            '"https://www.facebook.com/0xSojalSec/posts/112",'
+                            '"https://www.facebook.com/0xSojalSec/posts/111",'
+                            '"https://www.facebook.com/0xSojalSec/posts/110",'
+                            '"https://www.facebook.com/0xSojalSec/posts/109",'
+                            '"https://www.facebook.com/0xSojalSec/posts/108"]}}}'
+                        ),
+                        stderr="",
+                    )
                 return SimpleNamespace(
                     returncode=0,
                     stdout=(
                         '{"success":true,"data":{"result":{"source_page_url":"https://www.facebook.com/0xSojalSec",'
-                        '"fetched_at":"2026-04-25T03:05:00Z","search_status":"selection_ready",'
-                        '"end_of_feed_reached":false,"scan_stopped_reason":"selection_limit_reached",'
-                        '"posts_scanned":4,"post_urls":["https://www.facebook.com/0xSojalSec/posts/123"]}}}'
+                        '"fetched_at":"2026-04-25T03:05:01Z","end_of_feed_reached":false,'
+                        '"posts_scanned":12,"post_urls":['
+                        '"https://www.facebook.com/0xSojalSec/posts/112",'
+                        '"https://www.facebook.com/0xSojalSec/posts/111",'
+                        '"https://www.facebook.com/0xSojalSec/posts/110",'
+                        '"https://www.facebook.com/0xSojalSec/posts/109",'
+                        '"https://www.facebook.com/0xSojalSec/posts/108",'
+                        '"https://www.facebook.com/0xSojalSec/posts/107",'
+                        '"https://www.facebook.com/0xSojalSec/posts/106",'
+                        '"https://www.facebook.com/0xSojalSec/posts/105",'
+                        '"https://www.facebook.com/0xSojalSec/posts/104",'
+                        '"https://www.facebook.com/0xSojalSec/posts/103",'
+                        '"https://www.facebook.com/0xSojalSec/posts/102",'
+                        '"https://www.facebook.com/0xSojalSec/posts/101"]}}}'
                     ),
                     stderr="",
                 )
-            return SimpleNamespace(
-                returncode=0,
-                stdout=(
-                    '{"success":true,"data":{"result":{"source_page_url":"https://www.facebook.com/0xSojalSec/posts/123",'
-                    '"source_post_url":"https://www.facebook.com/0xSojalSec/posts/123",'
-                    '"published_at":"1h","relative_published_at":"1h","header_published_at":"",'
-                    '"header_relative_published_at":"8h","content_text":"A useful post",'
-                    '"author":"0xSojalSec","media_urls":[]}}}'
-                ),
-                stderr="",
-            )
+            if current_url.startswith("https://www.facebook.com/0xSojalSec/posts/"):
+                post_id = current_url.rsplit("/", 1)[-1]
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout=(
+                        '{"success":true,"data":{"result":{"source_page_url":"'
+                        + current_url
+                        + '","source_post_url":"'
+                        + current_url
+                        + '","published_at":"1h","relative_published_at":"1h",'
+                        '"header_published_at":"","header_relative_published_at":"8h",'
+                        '"content_text":"A useful post '
+                        + post_id
+                        + '","author":"0xSojalSec","media_urls":[]}}}'
+                    ),
+                    stderr="",
+                )
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr("subprocess.run", fake_run)
@@ -604,7 +653,7 @@ def test_run_agent_browser_extract_posts_uses_scan_then_post_detail_flow(monkeyp
         state_path="/tmp/state.json",
     )
 
-    assert len(calls) == 6
+    assert len(calls) == 6 + 12 * 3
     assert calls[0] == [
         "agent-browser",
         "--profile",
@@ -626,7 +675,17 @@ def test_run_agent_browser_extract_posts_uses_scan_then_post_detail_flow(monkeyp
         "/tmp/state.json",
         "eval",
     ]
-    assert calls[3] == [
+    assert calls[3][:8] == [
+        "agent-browser",
+        "--profile",
+        "facebook-profile",
+        "--session-name",
+        "session-1",
+        "--state",
+        "/tmp/state.json",
+        "eval",
+    ]
+    assert calls[6] == [
         "agent-browser",
         "--profile",
         "facebook-profile",
@@ -635,12 +694,130 @@ def test_run_agent_browser_extract_posts_uses_scan_then_post_detail_flow(monkeyp
         "--state",
         "/tmp/state.json",
         "open",
-        "https://www.facebook.com/0xSojalSec/posts/123",
+        "https://www.facebook.com/0xSojalSec/posts/112",
     ]
-    assert result["search_status"] == "partial_search_scope"
-    assert result["scan_stopped_reason"] == "top_level_candidate_scan"
-    assert result["posts_scanned"] == 4
+    assert result["search_status"] == "selection_ready"
+    assert result["scan_stopped_reason"] == "selection_limit_reached"
+    assert result["posts_scanned"] == 12
+    assert result["posts"][6]["source_post_url"] == "https://www.facebook.com/0xSojalSec/posts/106"
     assert result["posts"][0]["published_at"] == "8h"
+
+
+def test_run_agent_browser_extract_posts_reports_full_search_complete_when_feed_is_exhausted(
+    monkeypatch,
+):
+    current_url = ""
+
+    def fake_run(cmd, **kwargs):
+        nonlocal current_url
+        if "open" in cmd:
+            current_url = cmd[-1]
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        if "eval" in cmd:
+            if current_url == "https://www.facebook.com/0xSojalSec":
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout=(
+                        '{"success":true,"data":{"result":{"source_page_url":"https://www.facebook.com/0xSojalSec",'
+                        '"fetched_at":"2026-04-25T03:05:00Z","end_of_feed_reached":true,'
+                        '"posts_scanned":3,"post_urls":['
+                        '"https://www.facebook.com/0xSojalSec/posts/123",'
+                        '"https://www.facebook.com/0xSojalSec/posts/122",'
+                        '"https://www.facebook.com/0xSojalSec/posts/121"]}}}'
+                    ),
+                    stderr="",
+                )
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    '{"success":true,"data":{"result":{"source_page_url":"'
+                    + current_url
+                    + '","source_post_url":"'
+                    + current_url
+                    + '","published_at":"1h","relative_published_at":"1h",'
+                    '"header_published_at":"","header_relative_published_at":"1h",'
+                    '"content_text":"A useful post","author":"0xSojalSec","media_urls":[]}}}'
+                ),
+                stderr="",
+            )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = run_agent_browser_extract_posts(
+        page_url="https://www.facebook.com/0xSojalSec",
+        profile="facebook-profile",
+        session_name="session-1",
+        state_path="/tmp/state.json",
+    )
+
+    assert result["search_status"] == "full_search_complete"
+    assert result["end_of_feed_reached"] is True
+    assert result["scan_stopped_reason"] == "end_of_feed"
+    assert result["posts_scanned"] == 3
+
+
+def test_run_agent_browser_extract_posts_reports_partial_scope_when_scan_stalls(monkeypatch):
+    page_scan_evals = 0
+    current_url = ""
+
+    def fake_run(cmd, **kwargs):
+        nonlocal page_scan_evals, current_url
+        if "open" in cmd:
+            current_url = cmd[-1]
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        if "eval" in cmd:
+            script = cmd[-1]
+            if current_url == "https://www.facebook.com/0xSojalSec":
+                if "window.scrollTo" in script:
+                    return SimpleNamespace(
+                        returncode=0,
+                        stdout=(
+                            '{"success":true,"data":{"result":{"scroll_y":0,'
+                            '"scroll_height":2400,"viewport_height":900}}}'
+                        ),
+                        stderr="",
+                    )
+                page_scan_evals += 1
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout=(
+                        '{"success":true,"data":{"result":{"source_page_url":"https://www.facebook.com/0xSojalSec",'
+                        '"fetched_at":"2026-04-25T03:05:00Z","end_of_feed_reached":false,'
+                        '"posts_scanned":2,"post_urls":['
+                        '"https://www.facebook.com/0xSojalSec/posts/123",'
+                        '"https://www.facebook.com/0xSojalSec/posts/122"]}}}'
+                    ),
+                    stderr="",
+                )
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    '{"success":true,"data":{"result":{"source_page_url":"'
+                    + current_url
+                    + '","source_post_url":"'
+                    + current_url
+                    + '","published_at":"1h","relative_published_at":"1h",'
+                    '"header_published_at":"","header_relative_published_at":"1h",'
+                    '"content_text":"A useful post","author":"0xSojalSec","media_urls":[]}}}'
+                ),
+                stderr="",
+            )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = run_agent_browser_extract_posts(
+        page_url="https://www.facebook.com/0xSojalSec",
+        profile="facebook-profile",
+        session_name="session-1",
+        state_path="/tmp/state.json",
+    )
+
+    assert result["search_status"] == "partial_search_scope"
+    assert result["end_of_feed_reached"] is False
+    assert result["scan_stopped_reason"] == "dom_stall"
+    assert result["posts_scanned"] == 2
 
 
 def test_run_agent_browser_extract_fails_when_latest_post_url_not_found(monkeypatch):

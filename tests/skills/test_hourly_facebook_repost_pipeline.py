@@ -142,6 +142,118 @@ def test_duplicate_source_post_skips_writer_and_publisher(env, mocker):
     assert "facebook-publisher" not in [name for name, _args in calls]
 
 
+def test_selection_ready_backlog_drains_past_already_reposted_newer_posts(env, mocker):
+    history_path = env["base"] / "state" / env["page"] / "reposted_source_posts.json"
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    history_path.write_text(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "source_post_id": source_post_id,
+                        "source_post_url": f"https://www.facebook.com/0xSojalSec/posts/{source_post_id}",
+                        "published_at": f"2026-04-23T0{hour}:15:00Z",
+                        "published_at_resolved": f"2026-04-23T0{hour}:15:00Z",
+                        "reposted_at": "2026-04-23T09:30:00Z",
+                        "run_dir": f"/tmp/old-run-{source_post_id}",
+                    }
+                    for hour, source_post_id in enumerate(["128", "127", "126", "125", "124"], start=4)
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    backlog_post = _source_post(
+        source_post_id="123",
+        published_at="2026-04-22T09:15:00+07:00",
+        published_at_resolved="2026-04-22T09:15:00+07:00",
+    )
+    source_posts = _source_posts(
+        [
+            _source_post(source_post_id="128", published_at="2026-04-23T09:15:00Z"),
+            _source_post(source_post_id="127", published_at="2026-04-23T08:15:00Z"),
+            _source_post(source_post_id="126", published_at="2026-04-23T07:15:00Z"),
+            _source_post(source_post_id="125", published_at="2026-04-23T06:15:00Z"),
+            _source_post(source_post_id="124", published_at="2026-04-23T05:15:00Z"),
+            backlog_post,
+        ],
+        search_status="selection_ready",
+        scan_stopped_reason="selection_limit_reached",
+        posts_scanned=6,
+    )
+
+    def fake(name, args):
+        run_dir = Path(args["run_dir"])
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        if name == "facebook-page-latest-researcher":
+            (run_dir / "source_posts.json").write_text(
+                json.dumps(source_posts),
+                encoding="utf-8",
+            )
+            return {"status": "ok"}
+
+        if name == "hourly-facebook-writer":
+            latest_source_post = json.loads(
+                (run_dir / "latest_source_post.json").read_text(encoding="utf-8")
+            )
+            assert latest_source_post["source_post_id"] == "123"
+            (run_dir / "posts.json").write_text(
+                json.dumps(
+                    {
+                        "language": "vi",
+                        "posts": [
+                            {
+                                "time": "10:15",
+                                "type": "news",
+                                "content": "Bai viet backlog",
+                                "first_comment": None,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return {"status": "ok"}
+
+        if name == "facebook-publisher":
+            (run_dir / "publish_results.json").write_text(
+                json.dumps(
+                    {
+                        "page": env["page"],
+                        "date": "2026-04-23",
+                        "posts": [
+                            {
+                                "time": "10:15",
+                                "type": "news",
+                                "post_id": "123_post0",
+                                "comment_id": None,
+                                "status": 200,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return {"status": "ok"}
+
+        if name == "telegram-reporter":
+            return {"status": "ok"}
+
+        raise AssertionError(f"unexpected skill {name}")
+
+    mocker.patch("orchestrate.run_skill", side_effect=fake)
+
+    rc = _run(env)
+
+    assert rc == 0
+    decision = json.loads((_run_dir(env) / "repost_decision.json").read_text(encoding="utf-8"))
+    assert decision["action"] == "publish"
+    assert decision["reason"] == "publish_backlog_newest"
+    assert decision["selected_post"]["source_post_id"] == "123"
+
+
 def test_new_source_post_runs_writer_and_publisher_and_marks_state(env, mocker):
     validate_spy = mocker.spy(orchestrate, "validate")
 

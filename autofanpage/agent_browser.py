@@ -6,6 +6,9 @@ import subprocess
 from autofanpage.errors import SourceFailedError
 
 _AGENT_BROWSER_TIMEOUT_SECONDS = 60
+_AGENT_BROWSER_SELECTION_POST_LIMIT = 12
+_AGENT_BROWSER_MAX_SCAN_PASSES = 12
+_AGENT_BROWSER_MAX_STALLED_PASSES = 2
 _LATEST_POST_URL_JS = """
 (() => {
   const normalize = (href) => {
@@ -47,7 +50,6 @@ _RECENT_POST_URLS_JS = """
     href.includes("/posts/") ||
     href.includes("story_fbid=") ||
     href.includes("/permalink/");
-  const limit = 5;
   const seen = new Set();
   const postUrls = [];
   const feedRoots = Array.from(document.querySelectorAll('div[role="feed"], div[role="main"]'));
@@ -63,17 +65,47 @@ _RECENT_POST_URLS_JS = """
     }
     seen.add(url);
     postUrls.push(url);
-    if (postUrls.length >= limit) break;
   }
+
+  const scrollingElement = document.scrollingElement || document.documentElement;
+  const scrollY = window.scrollY || scrollingElement.scrollTop || 0;
+  const viewportHeight = window.innerHeight || scrollingElement.clientHeight || 0;
+  const scrollHeight = Math.max(
+    scrollingElement.scrollHeight || 0,
+    document.body?.scrollHeight || 0,
+  );
+  const endOfFeedReached = scrollHeight > 0
+    && scrollY + viewportHeight >= scrollHeight - 4;
 
   return {
     source_page_url: window.location.origin + window.location.pathname,
     fetched_at: new Date().toISOString(),
-    search_status: postUrls.length ? "partial_search_scope" : "fetch_error",
-    end_of_feed_reached: false,
-    scan_stopped_reason: postUrls.length ? "top_level_candidate_scan" : "no_posts_found",
+    end_of_feed_reached: endOfFeedReached,
     posts_scanned: postUrls.length,
     post_urls: postUrls,
+    scroll_y: scrollY,
+    viewport_height: viewportHeight,
+    scroll_height: scrollHeight,
+  };
+})()
+""".strip()
+_SCROLL_FEED_JS = """
+(() => {
+  const scrollingElement = document.scrollingElement || document.documentElement;
+  const viewportHeight = window.innerHeight || scrollingElement.clientHeight || 0;
+  const scrollHeight = Math.max(
+    scrollingElement.scrollHeight || 0,
+    document.body?.scrollHeight || 0,
+  );
+  const nextY = Math.max(0, scrollHeight - viewportHeight);
+  window.scrollTo(0, nextY);
+  return {
+    scroll_y: window.scrollY || scrollingElement.scrollTop || nextY,
+    viewport_height: viewportHeight,
+    scroll_height: Math.max(
+      scrollingElement.scrollHeight || 0,
+      document.body?.scrollHeight || 0,
+    ),
   };
 })()
 """.strip()
@@ -303,6 +335,40 @@ def _extract_post_from_url(*, base_cmd: list[str], page_url: str, post_url: str)
     )
 
 
+def _run_recent_post_scan(*, base_cmd: list[str]) -> dict:
+    scan_raw = _run_agent_browser_command(
+        base_cmd=base_cmd,
+        step_args=["eval", _RECENT_POST_URLS_JS],
+        json_output=True,
+    )
+    scan_payload = _parse_agent_browser_json(
+        scan_raw,
+        invalid_message="agent_browser returned invalid recent-post JSON",
+    )
+    if isinstance(scan_payload, str):
+        raise SourceFailedError("agent_browser recent-post scan returned string instead of object")
+    post_urls = scan_payload.get("post_urls")
+    if not isinstance(post_urls, list):
+        raise SourceFailedError("agent_browser recent-post scan missing post_urls")
+    return scan_payload
+
+
+def _scroll_recent_post_feed(*, base_cmd: list[str]) -> dict:
+    scroll_raw = _run_agent_browser_command(
+        base_cmd=base_cmd,
+        step_args=["eval", _SCROLL_FEED_JS],
+        json_output=True,
+    )
+    scroll_payload = _parse_agent_browser_json(
+        scroll_raw,
+        invalid_message="agent_browser returned invalid feed-scroll JSON",
+    )
+    if isinstance(scroll_payload, str):
+        raise SourceFailedError("agent_browser feed scroll returned string instead of object")
+    _run_agent_browser_command(base_cmd=base_cmd, step_args=["wait", "--load", "networkidle"])
+    return scroll_payload
+
+
 def run_agent_browser_extract(
     *,
     page_url: str,
@@ -352,49 +418,86 @@ def run_agent_browser_extract_posts(
 
     _run_agent_browser_command(base_cmd=base_cmd, step_args=["open", page_url])
     _run_agent_browser_command(base_cmd=base_cmd, step_args=["wait", "--load", "networkidle"])
-    scan_raw = _run_agent_browser_command(
-        base_cmd=base_cmd,
-        step_args=["eval", _RECENT_POST_URLS_JS],
-        json_output=True,
-    )
-    scan_payload = _parse_agent_browser_json(
-        scan_raw,
-        invalid_message="agent_browser returned invalid recent-post JSON",
-    )
-    if isinstance(scan_payload, str):
-        raise SourceFailedError("agent_browser recent-post scan returned string instead of object")
+    collected_post_urls: list[str] = []
+    seen_post_urls: set[str] = set()
+    scan_payload: dict = {
+        "source_page_url": page_url,
+        "fetched_at": "",
+        "end_of_feed_reached": False,
+        "posts_scanned": 0,
+    }
+    previous_snapshot_key: tuple[tuple[str, ...], int, int] | None = None
+    stalled_passes = 0
+    search_status = "fetch_error"
+    scan_stopped_reason = "no_posts_found"
+    end_of_feed_reached = False
+    posts_scanned = 0
 
-    post_urls = scan_payload.get("post_urls")
-    if not isinstance(post_urls, list):
-        raise SourceFailedError("agent_browser recent-post scan missing post_urls")
+    for _ in range(_AGENT_BROWSER_MAX_SCAN_PASSES):
+        scan_payload = _run_recent_post_scan(base_cmd=base_cmd)
+        post_urls = scan_payload["post_urls"]
+        discovered_new_url = False
+        for post_url in post_urls:
+            normalized_url = str(post_url).strip()
+            if not normalized_url or normalized_url in seen_post_urls:
+                continue
+            seen_post_urls.add(normalized_url)
+            collected_post_urls.append(normalized_url)
+            discovered_new_url = True
+
+        raw_posts_scanned = scan_payload.get("posts_scanned")
+        if raw_posts_scanned is None:
+            posts_scanned = max(posts_scanned, len(collected_post_urls))
+        else:
+            posts_scanned = max(posts_scanned, int(raw_posts_scanned))
+
+        end_of_feed_reached = bool(scan_payload.get("end_of_feed_reached"))
+        snapshot_key = (
+            tuple(collected_post_urls),
+            int(scan_payload.get("scroll_y") or 0),
+            int(scan_payload.get("scroll_height") or 0),
+        )
+
+        if end_of_feed_reached:
+            search_status = "full_search_complete"
+            scan_stopped_reason = "end_of_feed"
+            break
+
+        if len(collected_post_urls) >= _AGENT_BROWSER_SELECTION_POST_LIMIT:
+            search_status = "selection_ready"
+            scan_stopped_reason = "selection_limit_reached"
+            break
+
+        if not discovered_new_url and snapshot_key == previous_snapshot_key:
+            stalled_passes += 1
+            if stalled_passes >= _AGENT_BROWSER_MAX_STALLED_PASSES:
+                search_status = "partial_search_scope"
+                scan_stopped_reason = "dom_stall"
+                break
+        else:
+            stalled_passes = 0
+            previous_snapshot_key = snapshot_key
+
+        _scroll_recent_post_feed(base_cmd=base_cmd)
+    else:
+        search_status = "partial_search_scope"
+        scan_stopped_reason = "max_scroll_steps"
 
     posts = [
-        _extract_post_from_url(base_cmd=base_cmd, page_url=page_url, post_url=str(post_url))
-        for post_url in post_urls
-        if str(post_url).strip()
+        _extract_post_from_url(base_cmd=base_cmd, page_url=page_url, post_url=post_url)
+        for post_url in collected_post_urls
     ]
 
-    if posts:
+    if search_status == "fetch_error" and posts:
         search_status = "partial_search_scope"
-        scan_stopped_reason = "top_level_candidate_scan"
-    else:
-        raw_search_status = str(scan_payload.get("search_status") or "").strip()
-        search_status = raw_search_status or "fetch_error"
-        scan_stopped_reason = (
-            str(scan_payload.get("scan_stopped_reason") or "").strip()
-            or "no_posts_found"
-        )
+        scan_stopped_reason = "dom_stall"
 
     return {
         "source_page_url": str(scan_payload.get("source_page_url") or page_url).strip() or page_url,
         "fetched_at": str(scan_payload.get("fetched_at") or "").strip(),
         "search_status": search_status,
-        "end_of_feed_reached": (
-            scan_payload.get("end_of_feed_reached")
-            if isinstance(scan_payload.get("end_of_feed_reached"), bool)
-            else False
-        ),
+        "end_of_feed_reached": end_of_feed_reached,
         "scan_stopped_reason": scan_stopped_reason,
-        "posts_scanned": int(scan_payload.get("posts_scanned") or len(posts)),
+        "posts_scanned": posts_scanned,
         "posts": posts,
     }
