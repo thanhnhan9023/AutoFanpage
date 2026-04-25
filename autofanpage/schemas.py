@@ -276,7 +276,7 @@ SOURCE_POSTS_SCHEMA: dict[str, Any] = {
             ],
         },
         "end_of_feed_reached": {"type": "boolean"},
-        "scan_stopped_reason": {"type": "string"},
+        "scan_stopped_reason": {"type": "string", "minLength": 1},
         "posts_scanned": {"type": "integer", "minimum": 0},
         "posts": {
             "type": "array",
@@ -292,6 +292,17 @@ SOURCE_POSTS_SCHEMA: dict[str, Any] = {
             "then": {
                 "properties": {
                     "posts": {"minItems": 1},
+                },
+            },
+        },
+        {
+            "if": {
+                "properties": {"end_of_feed_reached": {"const": True}},
+                "required": ["end_of_feed_reached"],
+            },
+            "then": {
+                "properties": {
+                    "search_status": {"const": "full_search_complete"},
                 },
             },
         },

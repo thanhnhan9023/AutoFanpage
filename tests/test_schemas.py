@@ -810,6 +810,47 @@ def test_source_posts_schema_accepts_null_published_at_resolved():
     })
 
 
+def test_source_posts_schema_rejects_end_of_feed_reached_without_full_search_complete():
+    with pytest.raises(SchemaError):
+        validate("source_posts", {
+            "source_page_url": "https://www.facebook.com/0xSojalSec",
+            "backend": "browser_use_mcp",
+            "fetched_at": "2026-04-25T03:05:00Z",
+            "search_status": "partial_search_scope",
+            "end_of_feed_reached": True,
+            "scan_stopped_reason": "time_window_exceeded",
+            "posts_scanned": 8,
+            "posts": [
+                {
+                    "source_page_url": "https://www.facebook.com/0xSojalSec",
+                    "source_post_id": "1234567890",
+                    "source_post_url": "https://www.facebook.com/0xSojalSec/posts/1234567890",
+                    "author": "0xSojalSec",
+                    "published_at": "3 hours ago",
+                    "published_at_resolved": None,
+                    "content_text": "Latest post text",
+                    "media_urls": ["https://example.com/image.jpg"],
+                    "backend": "browser_use_mcp",
+                    "fetched_at": "2026-04-25T03:05:00Z",
+                },
+            ],
+        })
+
+
+def test_source_posts_schema_rejects_empty_scan_stopped_reason():
+    with pytest.raises(SchemaError):
+        validate("source_posts", {
+            "source_page_url": "https://www.facebook.com/0xSojalSec",
+            "backend": "browser_use_mcp",
+            "fetched_at": "2026-04-25T03:05:00Z",
+            "search_status": "fetch_error",
+            "end_of_feed_reached": False,
+            "scan_stopped_reason": "",
+            "posts_scanned": 0,
+            "posts": [],
+        })
+
+
 def test_source_posts_schema_rejects_selection_ready_with_empty_posts():
     with pytest.raises(SchemaError):
         validate("source_posts", {
