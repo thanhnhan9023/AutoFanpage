@@ -143,6 +143,8 @@ def test_duplicate_source_post_skips_writer_and_publisher(env, mocker):
 
 
 def test_new_source_post_runs_writer_and_publisher_and_marks_state(env, mocker):
+    validate_spy = mocker.spy(orchestrate, "validate")
+
     def fake(name, args):
         run_dir = Path(args["run_dir"])
         run_dir.mkdir(parents=True, exist_ok=True)
@@ -222,6 +224,16 @@ def test_new_source_post_runs_writer_and_publisher_and_marks_state(env, mocker):
     rc = _run(env)
 
     assert rc == 0
+    repost_decision = json.loads((_run_dir(env) / "repost_decision.json").read_text(encoding="utf-8"))
+    assert repost_decision == {
+        "action": "publish",
+        "reason": "publish_backlog_newest",
+        "selected_post": _source_post(),
+    }
+    assert any(
+        call.args == ("repost_decision", repost_decision)
+        for call in validate_spy.call_args_list
+    )
     latest_source_post = json.loads(
         (_run_dir(env) / "latest_source_post.json").read_text(encoding="utf-8")
     )
@@ -387,6 +399,9 @@ def test_zero_successful_publish_results_returns_failure_without_marking_state(
     assert rc == 1
     assert not (
         env["base"] / "state" / env["page"] / "latest_reposted_source.json"
+    ).exists()
+    assert not (
+        env["base"] / "state" / env["page"] / "reposted_source_posts.json"
     ).exists()
 
 

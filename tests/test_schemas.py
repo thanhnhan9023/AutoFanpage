@@ -718,13 +718,45 @@ def test_latest_source_post_schema_rejects_missing_required_field():
         })
 
 
-def test_repost_decision_schema_accepts_valid():
+def test_repost_decision_schema_accepts_publish_with_selected_post():
     validate("repost_decision", {
         "action": "publish",
-        "reason": "New source post found",
-        "source_post_id": "1234567890",
-        "source_post_url": "https://www.facebook.com/0xSojalSec/posts/1234567890",
+        "reason": "publish_today_newest",
+        "selected_post": {
+            "source_page_url": "https://www.facebook.com/0xSojalSec",
+            "source_post_id": "1234567890",
+            "source_post_url": "https://www.facebook.com/0xSojalSec/posts/1234567890",
+            "author": "0xSojalSec",
+            "published_at": "2026-04-15T06:00:00+07:00",
+            "published_at_resolved": "2026-04-15T06:00:00+07:00",
+            "content_text": "Latest post text",
+            "media_urls": ["https://example.com/image.jpg"],
+            "backend": "browser_use_mcp",
+            "fetched_at": "2026-04-15T06:05:00+07:00",
+        },
     })
+
+
+def test_repost_decision_schema_accepts_skip_without_selected_post():
+    validate("repost_decision", {
+        "action": "skip",
+        "reason": "skip_no_posts_fetched_after_full_search",
+    })
+
+
+def test_repost_decision_schema_accepts_error_without_selected_post():
+    validate("repost_decision", {
+        "action": "error",
+        "reason": "error_partial_search_scope",
+    })
+
+
+def test_repost_decision_schema_rejects_publish_without_selected_post():
+    with pytest.raises(SchemaError):
+        validate("repost_decision", {
+            "action": "publish",
+            "reason": "publish_today_newest",
+        })
 
 
 def test_repost_decision_schema_rejects_unknown_action():
@@ -732,8 +764,6 @@ def test_repost_decision_schema_rejects_unknown_action():
         validate("repost_decision", {
             "action": "repost",
             "reason": "Unknown action",
-            "source_post_id": "1234567890",
-            "source_post_url": "https://www.facebook.com/0xSojalSec/posts/1234567890",
         })
 
 

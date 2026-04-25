@@ -360,11 +360,39 @@ REPOST_DECISION_SCHEMA: dict[str, Any] = {
     "type": "object",
     "required": ["action", "reason"],
     "properties": {
-        "action": {"type": "string", "enum": ["publish", "skip_duplicate"]},
+        "action": {"type": "string", "enum": ["publish", "skip", "error"]},
         "reason": {"type": "string"},
-        "source_post_id": {"type": ["string", "null"]},
-        "source_post_url": {"type": "string"},
+        "selected_post": SOURCE_POST_SCHEMA,
     },
+    "allOf": [
+        {
+            "if": {
+                "properties": {"action": {"const": "publish"}},
+                "required": ["action"],
+            },
+            "then": {
+                "required": ["selected_post"],
+            },
+        },
+        {
+            "if": {
+                "properties": {"action": {"const": "skip"}},
+                "required": ["action"],
+            },
+            "then": {
+                "not": {"required": ["selected_post"]},
+            },
+        },
+        {
+            "if": {
+                "properties": {"action": {"const": "error"}},
+                "required": ["action"],
+            },
+            "then": {
+                "not": {"required": ["selected_post"]},
+            },
+        },
+    ],
 }
 
 

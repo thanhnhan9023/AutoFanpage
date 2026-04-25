@@ -97,6 +97,7 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(repost_decision, indent=2),
             encoding="utf-8",
         )
+        validate("repost_decision", repost_decision)
 
         action = repost_decision["action"]
         reason = repost_decision["reason"]
