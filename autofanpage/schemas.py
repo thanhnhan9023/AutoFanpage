@@ -198,6 +198,37 @@ LAST_SUCCESS_SCHEMA: dict[str, Any] = {
     },
 }
 
+LATEST_SOURCE_POST_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": [
+        "source_page_url",
+        "source_post_id",
+        "source_post_url",
+        "author",
+        "published_at",
+        "content_text",
+        "media_urls",
+        "backend",
+        "fetched_at",
+    ],
+    "properties": {
+        "source_page_url": {"type": "string"},
+        "source_post_id": {"type": ["string", "null"]},
+        "source_post_url": {"type": "string"},
+        "author": {"type": "string"},
+        "published_at": {"type": "string"},
+        "published_at_resolved": {"type": ["string", "null"]},
+        "content_text": {"type": "string", "minLength": 1},
+        "media_urls": {"type": "array", "items": {"type": "string"}},
+        "backend": {
+            "type": "string",
+            "enum": ["browser_use_mcp", "agent_browser"],
+        },
+        "fetched_at": {"type": "string"},
+    },
+}
+
+
 SOURCE_POST_SCHEMA: dict[str, Any] = {
     "type": "object",
     "required": [
@@ -212,25 +243,8 @@ SOURCE_POST_SCHEMA: dict[str, Any] = {
         "backend",
         "fetched_at",
     ],
-    "properties": {
-        "source_page_url": {"type": "string"},
-        "source_post_id": {"type": ["string", "null"]},
-        "source_post_url": {"type": "string"},
-        "author": {"type": "string"},
-        "published_at": {"type": "string"},
-        "published_at_resolved": {"type": "string"},
-        "content_text": {"type": "string", "minLength": 1},
-        "media_urls": {"type": "array", "items": {"type": "string"}},
-        "backend": {
-            "type": "string",
-            "enum": ["browser_use_mcp", "agent_browser"],
-        },
-        "fetched_at": {"type": "string"},
-    },
+    "properties": LATEST_SOURCE_POST_SCHEMA["properties"],
 }
-
-
-LATEST_SOURCE_POST_SCHEMA: dict[str, Any] = SOURCE_POST_SCHEMA
 
 
 SOURCE_POSTS_SCHEMA: dict[str, Any] = {
@@ -285,6 +299,26 @@ SOURCE_POSTS_SCHEMA: dict[str, Any] = {
 }
 
 
+LATEST_REPOSTED_SOURCE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": [
+        "source_post_id",
+        "source_post_url",
+        "published_at",
+        "reposted_at",
+        "run_dir",
+    ],
+    "properties": {
+        "source_post_id": {"type": ["string", "null"]},
+        "source_post_url": {"type": "string"},
+        "published_at": {"type": "string"},
+        "published_at_resolved": {"type": ["string", "null"]},
+        "reposted_at": {"type": "string"},
+        "run_dir": {"type": "string"},
+    },
+}
+
+
 REPOSTED_SOURCE_POST_SCHEMA: dict[str, Any] = {
     "type": "object",
     "required": [
@@ -295,18 +329,8 @@ REPOSTED_SOURCE_POST_SCHEMA: dict[str, Any] = {
         "reposted_at",
         "run_dir",
     ],
-    "properties": {
-        "source_post_id": {"type": ["string", "null"]},
-        "source_post_url": {"type": "string"},
-        "published_at": {"type": "string"},
-        "published_at_resolved": {"type": "string"},
-        "reposted_at": {"type": "string"},
-        "run_dir": {"type": "string"},
-    },
+    "properties": LATEST_REPOSTED_SOURCE_SCHEMA["properties"],
 }
-
-
-LATEST_REPOSTED_SOURCE_SCHEMA: dict[str, Any] = REPOSTED_SOURCE_POST_SCHEMA
 
 
 REPOSTED_SOURCE_POSTS_SCHEMA: dict[str, Any] = {
