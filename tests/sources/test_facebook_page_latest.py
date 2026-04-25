@@ -305,8 +305,59 @@ def test_fetch_source_posts_from_page_uses_agent_browser_backend_and_resolves_ti
         "state_path": "/tmp/state.json",
     }
     assert result["backend"] == "agent_browser"
-    assert result["search_status"] == "partial_search_scope"
+    assert result["search_status"] == "selection_ready"
+    assert result["scan_stopped_reason"] == "selection_limit_reached"
+    assert result["end_of_feed_reached"] is False
     assert result["posts"][0]["published_at_resolved"] == "2026-04-25T02:05:00+07:00"
+
+
+def test_fetch_source_posts_from_page_preserves_agent_browser_full_search_complete_semantics(
+    monkeypatch,
+):
+    def fake_run_agent_browser_extract_posts(
+        *,
+        page_url,
+        profile=None,
+        session_name=None,
+        state_path=None,
+    ):
+        return {
+            "source_page_url": page_url,
+            "fetched_at": "2026-04-25T03:05:00Z",
+            "search_status": "full_search_complete",
+            "end_of_feed_reached": True,
+            "scan_stopped_reason": "end_of_feed",
+            "posts_scanned": 7,
+            "posts": [
+                {
+                    "source_page_url": page_url,
+                    "source_post_url": f"{page_url}/posts/123",
+                    "author": "0xSojalSec",
+                    "published_at": "2026-04-25T01:05:00Z",
+                    "content_text": "Newest public post",
+                    "media_urls": [],
+                }
+            ],
+        }
+
+    monkeypatch.setattr(
+        "autofanpage.sources.facebook_page_latest.run_agent_browser_extract_posts",
+        fake_run_agent_browser_extract_posts,
+    )
+
+    result = fetch_source_posts_from_page(
+        {
+            "enabled": True,
+            "page_url": "https://www.facebook.com/0xSojalSec",
+            "backend": "agent_browser",
+        },
+        profile_timezone="UTC",
+    )
+
+    assert result["search_status"] == "full_search_complete"
+    assert result["scan_stopped_reason"] == "end_of_feed"
+    assert result["end_of_feed_reached"] is True
+    assert result["posts_scanned"] == 7
 
 
 def test_fetch_source_posts_from_page_uses_browser_use_multi_post_branch(monkeypatch):

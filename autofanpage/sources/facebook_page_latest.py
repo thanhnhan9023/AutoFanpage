@@ -139,16 +139,6 @@ def _normalize_media_urls(raw: dict[str, Any]) -> list[str]:
     return []
 
 
-def _honest_agent_browser_source_posts(raw: dict[str, Any]) -> dict[str, Any]:
-    normalized = dict(raw)
-    posts = normalized.get("posts")
-    if isinstance(posts, list) and posts:
-        normalized["search_status"] = "partial_search_scope"
-        normalized["scan_stopped_reason"] = "top_level_candidate_scan"
-        normalized["end_of_feed_reached"] = False
-    return normalized
-
-
 def _require_non_empty(raw: dict[str, Any], field_name: str) -> str:
     value = str(raw.get(field_name) or "").strip()
     if not value:
@@ -326,7 +316,6 @@ def fetch_source_posts_from_page(
             session_name=source_cfg.get("agent_browser_session_name"),
             state_path=source_cfg.get("agent_browser_state_path"),
         )
-        raw = _honest_agent_browser_source_posts(raw)
         return normalize_source_posts_artifact(
             raw,
             backend=backend,
