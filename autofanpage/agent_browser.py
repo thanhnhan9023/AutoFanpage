@@ -33,6 +33,47 @@ _LATEST_POST_URL_JS = """
   return "";
 })()
 """.strip()
+_RECENT_POST_URLS_JS = """
+(() => {
+  const normalize = (href) => {
+    if (typeof href !== "string" || !href.trim()) return "";
+    try {
+      return new URL(href, window.location.href).toString();
+    } catch (_err) {
+      return "";
+    }
+  };
+  const isPostUrl = (href) =>
+    href.includes("/posts/") ||
+    href.includes("story_fbid=") ||
+    href.includes("/permalink/");
+  const limit = 5;
+  const seen = new Set();
+  const postUrls = [];
+
+  const links = Array.from(document.querySelectorAll('a[href]'));
+  for (const link of links) {
+    const url = normalize(link.getAttribute("href") || "");
+    if (!url || !isPostUrl(url) || seen.has(url)) continue;
+    if (!url.startsWith("https://www.facebook.com/") && !url.startsWith("https://facebook.com/")) {
+      continue;
+    }
+    seen.add(url);
+    postUrls.push(url);
+    if (postUrls.length >= limit) break;
+  }
+
+  return {
+    source_page_url: window.location.origin + window.location.pathname,
+    fetched_at: new Date().toISOString(),
+    search_status: postUrls.length ? "selection_ready" : "fetch_error",
+    end_of_feed_reached: false,
+    scan_stopped_reason: postUrls.length ? "selection_limit_reached" : "no_posts_found",
+    posts_scanned: postUrls.length,
+    post_urls: postUrls,
+  };
+})()
+""".strip()
 _EXTRACTION_JS = """
 (() => {
   const text = (value) => typeof value === "string" ? value.trim() : "";
@@ -161,13 +202,12 @@ def _run_agent_browser_command(
     return proc.stdout
 
 
-def run_agent_browser_extract(
+def _build_base_cmd(
     *,
-    page_url: str,
     profile: str | None = None,
     session_name: str | None = None,
     state_path: str | None = None,
-) -> dict:
+) -> list[str]:
     base_cmd = ["agent-browser"]
     if profile:
         base_cmd.extend(["--profile", profile])
@@ -175,22 +215,11 @@ def run_agent_browser_extract(
         base_cmd.extend(["--session-name", session_name])
     if state_path:
         base_cmd.extend(["--state", state_path])
+    return base_cmd
 
-    _run_agent_browser_command(base_cmd=base_cmd, step_args=["open", page_url])
-    _run_agent_browser_command(base_cmd=base_cmd, step_args=["wait", "--load", "networkidle"])
-    latest_post_raw = _run_agent_browser_command(
-        base_cmd=base_cmd,
-        step_args=["eval", _LATEST_POST_URL_JS],
-        json_output=True,
-    )
-    latest_post_url = _parse_agent_browser_json(
-        latest_post_raw,
-        invalid_message="agent_browser returned invalid latest-post JSON",
-    )
-    if not isinstance(latest_post_url, str) or not latest_post_url:
-        raise SourceFailedError("agent_browser could not find latest post URL")
 
-    _run_agent_browser_command(base_cmd=base_cmd, step_args=["open", latest_post_url])
+def _extract_post_from_url(*, base_cmd: list[str], page_url: str, post_url: str) -> dict:
+    _run_agent_browser_command(base_cmd=base_cmd, step_args=["open", post_url])
     _run_agent_browser_command(base_cmd=base_cmd, step_args=["wait", "--load", "networkidle"])
     extraction_raw = _run_agent_browser_command(
         base_cmd=base_cmd,
@@ -206,5 +235,94 @@ def run_agent_browser_extract(
     return _normalize_agent_browser_extract(
         payload,
         page_url=page_url,
-        latest_post_url=latest_post_url,
+        latest_post_url=post_url,
     )
+
+
+def run_agent_browser_extract(
+    *,
+    page_url: str,
+    profile: str | None = None,
+    session_name: str | None = None,
+    state_path: str | None = None,
+) -> dict:
+    base_cmd = _build_base_cmd(
+        profile=profile,
+        session_name=session_name,
+        state_path=state_path,
+    )
+
+    _run_agent_browser_command(base_cmd=base_cmd, step_args=["open", page_url])
+    _run_agent_browser_command(base_cmd=base_cmd, step_args=["wait", "--load", "networkidle"])
+    latest_post_raw = _run_agent_browser_command(
+        base_cmd=base_cmd,
+        step_args=["eval", _LATEST_POST_URL_JS],
+        json_output=True,
+    )
+    latest_post_url = _parse_agent_browser_json(
+        latest_post_raw,
+        invalid_message="agent_browser returned invalid latest-post JSON",
+    )
+    if not isinstance(latest_post_url, str) or not latest_post_url:
+        raise SourceFailedError("agent_browser could not find latest post URL")
+
+    return _extract_post_from_url(
+        base_cmd=base_cmd,
+        page_url=page_url,
+        post_url=latest_post_url,
+    )
+
+
+def run_agent_browser_extract_posts(
+    *,
+    page_url: str,
+    profile: str | None = None,
+    session_name: str | None = None,
+    state_path: str | None = None,
+) -> dict:
+    base_cmd = _build_base_cmd(
+        profile=profile,
+        session_name=session_name,
+        state_path=state_path,
+    )
+
+    _run_agent_browser_command(base_cmd=base_cmd, step_args=["open", page_url])
+    _run_agent_browser_command(base_cmd=base_cmd, step_args=["wait", "--load", "networkidle"])
+    scan_raw = _run_agent_browser_command(
+        base_cmd=base_cmd,
+        step_args=["eval", _RECENT_POST_URLS_JS],
+        json_output=True,
+    )
+    scan_payload = _parse_agent_browser_json(
+        scan_raw,
+        invalid_message="agent_browser returned invalid recent-post JSON",
+    )
+    if isinstance(scan_payload, str):
+        raise SourceFailedError("agent_browser recent-post scan returned string instead of object")
+
+    post_urls = scan_payload.get("post_urls")
+    if not isinstance(post_urls, list):
+        raise SourceFailedError("agent_browser recent-post scan missing post_urls")
+
+    posts = [
+        _extract_post_from_url(base_cmd=base_cmd, page_url=page_url, post_url=str(post_url))
+        for post_url in post_urls
+        if str(post_url).strip()
+    ]
+
+    return {
+        "source_page_url": str(scan_payload.get("source_page_url") or page_url).strip() or page_url,
+        "fetched_at": str(scan_payload.get("fetched_at") or "").strip(),
+        "search_status": str(scan_payload.get("search_status") or "").strip() or "selection_ready",
+        "end_of_feed_reached": (
+            scan_payload.get("end_of_feed_reached")
+            if isinstance(scan_payload.get("end_of_feed_reached"), bool)
+            else False
+        ),
+        "scan_stopped_reason": (
+            str(scan_payload.get("scan_stopped_reason") or "").strip()
+            or "selection_limit_reached"
+        ),
+        "posts_scanned": int(scan_payload.get("posts_scanned") or len(posts)),
+        "posts": posts,
+    }
